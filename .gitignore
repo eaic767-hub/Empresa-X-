@@ -1,0 +1,20 @@
+# Archivos de estado de Terraform (NUNCA deben ir a GitHub)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Carpeta de inicialización y binarios (Se descargan con terraform init)
+.terraform/
+
+# Archivo de variables sensibles con contraseñas o claves privadas
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Llaves SSH privadas/públicas que generes en el laboratorio
+*.pem
+*.key
+*.pub
