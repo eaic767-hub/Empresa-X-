@@ -13,36 +13,35 @@ jobs:
 
     defaults:
       run:
-        working-directory:./environments/dev
+        working-directory: ./environments/dev
 
     steps:
-    #1. Clonar el repositorio en el runner virtual de GitHub
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      # 1. Clonar el repositorio en el runner virtual de GitHub
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    #2. Instalar el binario de Terraform
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.6.0
+      # 2. Instalar el binario de Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
 
-    #3. Inyectar las credenciales creadas en AWS
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-    
-    #4. Validar que el codigo cumpla los estandares de formato
-    - name: Terraform Format Check
-      run: terraform fmt -check
+      # 3. Inyectar las credenciales creadas en AWS
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-    #5. Descargar los proveedores y módulos (init)
-    - name: Terraform init
-      run: terraform init
-    
-    #6. Genera el plan de cambios
-    - name: Terraform plan
-      run: terraform plan
-      
+      # 4. Validar que el código cumpla los estándares de formato
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      # 5. Descargar los proveedores y módulos (init)
+      - name: Terraform init
+        run: terraform init
+
+      # 6. Generar el plan de cambios
+      - name: Terraform plan
+        run: terraform plan
