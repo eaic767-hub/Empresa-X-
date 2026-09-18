@@ -58,7 +58,7 @@ resource "aws_security_group" "web_sg" {
   tags = {
     Name        = "web-sg-${var.environment}"
     Environment = var.environment
-    VpcId = var.vpc_id # <- Etiqueta para que el sg lleve la etiqueta del vpn de despliegue para auditoria
+    VpcId       = var.vpc_id # <- Etiqueta para que el sg lleve la etiqueta del vpn de despliegue para auditoria
   }
 }
 
@@ -72,11 +72,11 @@ resource "aws_instance" "web_server" {
 
   #NUEVO BLOQUE: Configuración de almacenamiento
   root_block_device {
-    volume_size =var.root_volume_size
-    volume_type = "gp3"
-    delete_on_termination =true
+    volume_size           = var.root_volume_size
+    volume_type           = "gp3"
+    delete_on_termination = true
   }
-  
+
   user_data = <<-EOF
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive

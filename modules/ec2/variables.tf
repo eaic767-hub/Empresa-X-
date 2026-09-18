@@ -21,7 +21,7 @@ variable "instance_type" {
 }
 
 variable "root_volume_size" {
-  description ="tamaño de disco de la instancia en Gb"
-  type = number
-  default = 8
+  description = "tamaño de disco de la instancia en Gb"
+  type        = number
+  default     = 8
 }

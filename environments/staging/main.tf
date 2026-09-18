@@ -13,9 +13,9 @@ module "ec2_staging" {
 
   environment      = var.environment
   vpc_id           = module.vpc_staging.vpc_id
-  public_subnet_id = module .vpc_staging.public_subnet_id
-  instance_type = var.instance_type
-  public_key_path = var.public_key_path
+  public_subnet_id = module.vpc_staging.public_subnet_id
+  instance_type    = var.instance_type
+  public_key_path  = var.public_key_path
   root_volume_size = var.root_volume_size
 }
 
@@ -24,7 +24,7 @@ module "rds_dev" {
 
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnet_ids    = [module.vpc_dev.private_subnet_id,module.vpc_dev.public_subnet_id]
+  private_subnet_ids    = [module.vpc_dev.private_subnet_id, module.vpc_dev.public_subnet_id]
   ec2_security_group_id = module.ec2_dev.security_group_id
   db_name               = var.db_name
   db_user               = var.db_user
