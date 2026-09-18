@@ -2,9 +2,9 @@ name: "Terraform CI/CD Pipeline"
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
   terraform:
@@ -16,17 +16,16 @@ jobs:
         working-directory: ./environments/dev
 
     steps:
-      # 1. Clonar el repositorio en el runner virtual de GitHub
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Instalar el binario de Terraform
+      # Usar v3.1.2 para corregir las claves PGP expiradas de HashiCorp
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
-          terraform_version: 1.6.0
+          terraform_version: 1.9.0
+          terraform_wrapper: false
 
-      # 3. Inyectar las credenciales creadas en AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -34,14 +33,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      # 4. Validar que el código cumpla los estándares de formato
       - name: Terraform Format Check
         run: terraform fmt -check
 
-      # 5. Descargar los proveedores y módulos (init)
-      - name: Terraform init
-        run: terraform init
+      - name: Terraform Init
+        run: terraform init -upgrade
 
-      # 6. Generar el plan de cambios
-      - name: Terraform plan
+      - name: Terraform Plan
         run: terraform plan
