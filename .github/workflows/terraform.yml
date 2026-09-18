@@ -13,7 +13,7 @@ jobs:
 
     defaults:
       run:
-      working-directory:./environments/dev
+        working-directory:./environments/dev
 
     steps:
     #1. Clonar el repositorio en el runner virtual de GitHub
@@ -30,8 +30,8 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secretis.AWS_SECRET_ACCESS_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
     
     #4. Validar que el codigo cumpla los estandares de formato
@@ -40,7 +40,7 @@ jobs:
 
     #5. Descargar los proveedores y módulos (init)
     - name: Terraform init
-      run: tfinit
+      run: terraform init
     
     #6. Genera el plan de cambios
     - name: Terraform plan
