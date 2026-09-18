@@ -38,6 +38,10 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -upgrade
+      
+        # Paso previo para crear el archivo de clave pública en el runner de GitHub
+      - name: Create Dummy SSH Public Key
+        run: echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCdummykeygithubactions" > environments/dev/nginx-server.key.pub
 
       - name: Terraform Plan
         env:
