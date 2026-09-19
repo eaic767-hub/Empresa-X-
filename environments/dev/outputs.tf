@@ -16,11 +16,6 @@ output "frontend_bucket_name" {
   value       = module.frontend.bucket_id
 }
 
-output "frontend_webside_endpoint" {
-  description = "Endpoint de S3 para acceder al frontend"
-  value       = module.frontend.webside_endpoint
-}
-
 output "frontend_cloudfront_url" {
   description = "URL pública del Frontend (HTTPS)"
   value       = "https://${module.frontend.cloudfront_domain_name}"
