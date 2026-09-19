@@ -10,7 +10,7 @@ resource "aws_s3_bucket" "frontend" {
 }
 
 #2. Bloqueo de acceso público directo (Buenas practicas DevSecOps: todo pasa por el CloudFront)
-resource "aws_S3_bucket_public_access_block" "frontend_public_block" {
+resource "aws_s3_bucket_public_access_block" "frontend_public_block" {
   bucket = aws_s3_bucket.frontend.id
 
   block_public_acls       = true
