@@ -30,3 +30,11 @@ module "rds_dev" {
   db_user               = var.db_user
   db_password           = var.db_password
 }
+
+#Modulo de Frontend (Almacenamiento S3)
+module "frontend" {
+  source = "../../modules/s3_frontend"
+
+  environment = var.environment
+  bucket_name = "frontend-app"
+}
