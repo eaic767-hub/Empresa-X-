@@ -3,13 +3,12 @@ output "bucket_id" {
   value       = aws_s3_bucket.frontend.id
 }
 
-output "bucket_arn" {
-  description = "ARN del bucket S3"
-  value       = aws_s3_bucket.frontend.arn
+output "cloudfront_domain_name" {
+  description = "Dominio público HTTPS de CloudFront para acceder a la Web"
+  value       = aws_cloudfront_distribution.frontend_cdn.domain_name
 }
 
-output "webside_endpoint" {
-  description = "Endpoint web estático del bucket S3"
-  value       = aws_s3_bucket_website_configuration.frontend.website_endpoint
+output "cloudfront_distribution_id" {
+  description = "ID de la distribución de CloudFront (necesario para invalidar caché en su CI/CD)"
+  value       = aws_cloudfront_distribution.frontend_cdn.id
 }
-
