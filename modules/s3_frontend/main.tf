@@ -19,7 +19,7 @@ resource "aws_s3_bucket_public_access_block" "frontend_public_block" {
   restrict_public_buckets = true
 }
 
-#3. Distribución de CloudFront CDN
+#3. REGISTRO DE AWS CLOUDFRONT OAC
 resource "aws_cloudfront_origin_access_control" "oac" {
   name                              = "oac-${var.bucket_name}-${var.environment}"
   description                       = "OAC para acceder a S3 desde CloudFront"
