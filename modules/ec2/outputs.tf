@@ -9,5 +9,5 @@ output "security_group_id" {
 
 output "instance_id" {
   description = "ID de la instancia EC2 para automatización"
-  value       = aws_instance.web.id
+  value       = aws_instance.web_server.id
 }
