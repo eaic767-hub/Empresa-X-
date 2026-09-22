@@ -1,6 +1,6 @@
 #1. nombre unico para la cubeta s3 (S3 requiere nombres globales unicos)
 resource "aws_s3_bucket" "terraform_state" {
-  bucket        = "mi-terraform-state-lab-2026-v1" #si este nombre existe se cambia por uno unico
+  bucket        = "terraform-bucket-empresax-2026-v1" #si este nombre existe se cambia por uno unico
   force_destroy = true                             #permite borrar la cubeta con destroy en pruebas
 }
 

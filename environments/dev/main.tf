@@ -36,5 +36,5 @@ module "frontend" {
   source = "../../modules/s3_frontend"
 
   environment = var.environment
-  bucket_name = "frontend-app"
+  bucket_name = "frontend-empresax-pp-dev-2026"
 }
