@@ -10,10 +10,10 @@ terraform {
 
   # CONFIGURACIÓN DE BACKEND REMOTO 
   backend "s3" {
-    bucket       = "terraform-bucket-empresax-2026-v1"
-    key          = "dev/terraform.tfstate"
-    region       = "us-east-1"
-    encrypt      = true
+    bucket  = "terraform-bucket-empresax-2026-v1"
+    key     = "dev/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
   }
 }
 
