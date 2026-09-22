@@ -23,6 +23,24 @@ resource "aws_security_group" "web_sg" {
   description = "Permitir trafico HTTP, HTTPS y SSH"
   vpc_id      = var.vpc_id
 
+  #TRAFICO DE PUERTOS DE API DE BACKEND
+  ingress {
+    description = "Puerto 8080"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Puerto 3000"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  #TRAFICO DE PUERTOS SSH, HTTP Y HTTPS
   ingress {
     description = "Acceso HTTP"
     from_port   = 80
