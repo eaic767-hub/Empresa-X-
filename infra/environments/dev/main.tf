@@ -46,7 +46,7 @@ module "ecr" {
   repository_name = "empresa-x-backend-dev"
 
   tags = {
-    Environment = dev
+    Environment = "dev"
     Project     = "EmpresaX"
   }
 }
