@@ -38,3 +38,15 @@ module "frontend" {
   environment = var.environment
   bucket_name = "frontend-empresax-pp-dev-2026"
 }
+
+#modulo de ECR (DOCKER, DOCKERCOMPOSE AND MODULE ECR)
+module "ecr" {
+  source = "../../modules/ecr"
+
+  repository_name = "empresa-x-backend-dev"
+
+  tags = {
+    Environment = dev
+    Project     = "EmpresaX"
+  }
+}

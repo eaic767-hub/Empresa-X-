@@ -29,3 +29,9 @@ output "cloudfront_distribution_id" {
   description = "ID de CloudFront para invalidaciones"
   value       = module.frontend.cloudfront_distribution_id
 }
+
+#--- URL EC2---
+
+output "ecr_repository_url" {
+  value = module.ecr.repository_url
+}
