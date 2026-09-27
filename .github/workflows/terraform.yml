@@ -15,7 +15,6 @@ jobs:
       run:
         working-directory: ./infra/environments/dev
 
-    # 👈 Declaramos las variables una sola vez para TODO el job
     env:
       TF_VAR_aws_region: "us-east-1"
       TF_VAR_environment: "dev"
@@ -43,8 +42,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Create Dummy SSH Public Key
-        run: echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCdummykeygithubactions" > nginx-server.key.pub
+      # Genera una clave OpenSSH 100% válida en tiempo de ejecución
+      - name: Generate Valid SSH Key Pair
+        run: ssh-keygen -t rsa -b 2048 -f nginx-server.key -N ""
 
       - name: Terraform Format Check
         run: terraform fmt -check
