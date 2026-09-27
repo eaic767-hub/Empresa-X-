@@ -38,8 +38,8 @@ jobs:
 
       - name: Terraform Init
         run: |
-        rm -rf .terraform .terraform.lock.hcl
-        terraform init -upgrade 
+          rm -rf .terraform .terraform.lock.hcl
+          terraform init -upgrade -reconfigure
 # Crear el archivo directamente en la carpeta actual (environments/dev)
       - name: Create Dummy SSH Public Key
         run: echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCdummykeygithubactions" > nginx-server.key.pub
