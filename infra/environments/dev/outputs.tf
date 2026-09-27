@@ -33,5 +33,6 @@ output "cloudfront_distribution_id" {
 #--- URL EC2---
 
 output "ecr_repository_url" {
-  value = module.ecr.repository_url
+  description = "URL del repositorio ECR para subir imagenes"
+  value       = module.ecr.repository_url
 }
