@@ -23,7 +23,7 @@ resource "aws_security_group" "alb_sg" {
   description = "Permitir trafico HTTP y HTTPS desde Internet al ALB"
   vpc_id      = var.vpc_id
 
-  #TRAFICO DE PUERTOS SSH, HTTP Y HTTPS
+  #TRAFICO DE PUERTOS  HTTP Y HTTPS
   ingress {
     description = "Acceso HTTP publico"
     from_port   = 80
