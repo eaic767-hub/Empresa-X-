@@ -18,31 +18,14 @@ resource "aws_key_pair" "web_key" {
   public_key = file(var.public_key_path)
 }
 
-resource "aws_security_group" "web_sg" {
-  name        = "web-server-sg-${var.environment}"
-  description = "Permitir trafico HTTP, HTTPS y SSH"
+resource "aws_security_group" "alb_sg" {
+  name        = "alb-sg-${var.environment}"
+  description = "Permitir trafico HTTP y HTTPS desde Internet al ALB"
   vpc_id      = var.vpc_id
-
-  #TRAFICO DE PUERTOS DE API DE BACKEND
-  ingress {
-    description = "Puerto 8080"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Puerto 3000"
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   #TRAFICO DE PUERTOS SSH, HTTP Y HTTPS
   ingress {
-    description = "Acceso HTTP"
+    description = "Acceso HTTP publico"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -50,15 +33,7 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "Acceso SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Acceso HTTPS"
+    description = "Acceso HTTPS publico"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -74,40 +49,48 @@ resource "aws_security_group" "web_sg" {
   }
 
   tags = {
-    Name        = "web-sg-${var.environment}"
+    Name        = "alb-sg-${var.environment}"
     Environment = var.environment
     VpcId       = var.vpc_id # <- Etiqueta para que el sg lleve la etiqueta del vpn de despliegue para auditoria
   }
 }
 
-resource "aws_instance" "web_server" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.instance_type
-  key_name                    = aws_key_pair.web_key.key_name
-  subnet_id                   = var.public_subnet_id
-  vpc_security_group_ids      = [aws_security_group.web_sg.id]
-  associate_public_ip_address = true
+#4. Security Group para las instancias EC2 (PRIVADO/PROTEGIDO)
+resource "aws_security_group" "web_sg" {
+  name        = "web-server-sg-${var.environment}"
+  description = "Permitir trafico exclusivamente desde el ALB y SSH de administracion"
+  vpc_id      = var.vpc_id
 
-  #NUEVO BLOQUE: Configuración de almacenamiento
-  root_block_device {
-    volume_size           = var.root_volume_size
-    volume_type           = "gp3"
-    delete_on_termination = true
+  #TRAFICO WEB: UNICAMENTE PROVENIENTE DEL ALB
+  ingress {
+    description     = "HTTP solo desde el ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
-  user_data = <<-EOF
-        #!/bin/bash
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y nginx
-        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment}<h1>" > /var/www/html/index.html
-        systemctl enable --now nginx
-        EOF
+  #ACCESO SSH DE ADMINISTRACIÓN (Puerto 22)
+  ingress {
+    description = "Acceso SSH de administracion"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] #NOTA: SE RECOMIENDA EN PROD RESTRINGIR LA IP DEL SYSADMIN
+  }
 
-  user_data_replace_on_change = true
+  #SALIDA A INTERNET (Para descargar contenedores de ECR y actualizar paquetes)
+  egress {
+    description = "Salida total a Internet"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
-    Name        = "WebServer-${var.environment}"
+    Name        = "web-sg-${var.environment}"
     Environment = var.environment
+    VpcId       = var.vpc_id
   }
 }

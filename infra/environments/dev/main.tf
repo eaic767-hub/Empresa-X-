@@ -8,17 +8,6 @@ module "vpc_dev" {
   aws_region          = var.aws_region
 }
 
-module "ec2_dev" {
-  source = "../../modules/ec2"
-
-  environment      = var.environment
-  vpc_id           = module.vpc_dev.vpc_id
-  public_subnet_id = module.vpc_dev.public_subnet_id
-  instance_type    = var.instance_type
-  public_key_path  = var.public_key_path
-  root_volume_size = var.root_volume_size
-}
-
 module "rds_dev" {
   source = "../../modules/rds"
 
@@ -49,4 +38,33 @@ module "ecr" {
     Environment = "dev"
     Project     = "EmpresaX"
   }
+}
+# modulo EC2 (SG, AMI, KEY SSH, ENTRADAS POR SUBNET PUBLICAS A ALB Y PRIVADAS )
+module "ec2" {
+  source          = "./modules/ec2"
+  environment     = var.environment
+  vpc_id          = module.network.vpc_id
+  public_key_path = var.public_key_path
+}
+
+#MODULO APPLICATION LOAD BALANCER 
+module "alb" {
+  source                = "./modules/alb"
+  environment           = var.environment
+  vpc_id                = module.network.vpc_id
+  public_subnet_ids     = module.network.public_subnet_ids
+  alb_security_group_id = module.ec2.alb_security_group_id
+}
+#MODULO AUTOSCALLING GROUP
+module "asg" {
+  source                = "./modules/asg"
+  environment           = var.environment
+  vpc_id                = module.network.vpc_id
+  private_subnet_ids    = module.network.private_subnet_ids
+  target_group_arn      = module.alb.target_group_arn
+  ami_id                = module.ec2.ami_id
+  instance_type         = var.instance_type
+  key_name              = module.ec2.key_name
+  ec2_security_group_id = module.ec2.ec2_security_group_id
+  root_volume_size      = var.root_volume_size
 }
