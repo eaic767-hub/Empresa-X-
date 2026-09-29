@@ -60,7 +60,7 @@ module "asg" {
   source                = "../../modules/asg"
   environment           = var.environment
   vpc_id                = module.network.vpc_id
-  private_subnet_id     = module.network.private_subnet_id
+  private_subnet_id     = module.network.private_subnets_id
   target_group_arn      = module.alb.target_group_arn
   ami_id                = module.ec2.ami_id
   instance_type         = var.instance_type
