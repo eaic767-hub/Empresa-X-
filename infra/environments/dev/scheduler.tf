@@ -1,6 +1,6 @@
 # 1. Rol IAM para el planificador de AWS (Scheduler)
 resource "aws_iam_role" "scheduler_role" {
-  name = "scheduler-ec2-rds-role-${var.environment}"
+  name = "scheduler-asg-rds-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -16,9 +16,9 @@ resource "aws_iam_role" "scheduler_role" {
   })
 }
 
-# 2. Permisos de IAM para apagar y encender EC2/RDS
+# 2. Permisos de IAM para modificar ASG y detener/iniciar RDS
 resource "aws_iam_role_policy" "scheduler_policy" {
-  name = "scheduler-ec2-rds-policy-${var.environment}"
+  name = "scheduler-asg-rds-policy-${var.environment}"
   role = aws_iam_role.scheduler_role.id
 
   policy = jsonencode({
@@ -27,8 +27,7 @@ resource "aws_iam_role_policy" "scheduler_policy" {
       {
         Effect = "Allow"
         Action = [
-          "ec2:StartInstances",
-          "ec2:StopInstances",
+          "autoscaling:UpdateAutoScalingGroup",
           "rds:StartDBInstance",
           "rds:StopDBInstance"
         ]
@@ -38,9 +37,13 @@ resource "aws_iam_role_policy" "scheduler_policy" {
   })
 }
 
-# 3. Regla para APAGAR a las 8:00 PM (Lunes a Viernes)
-resource "aws_scheduler_schedule" "stop_dev_environment" {
-  name       = "stop-dev-resources"
+# ==========================================
+# 3. ACCIONES DE APAGADO (8:00 PM Lunes-Viernes)
+# ==========================================
+
+# 3.1 Apagar Servidores Web (Seta ASG en 0)
+resource "aws_scheduler_schedule" "stop_dev_asg" {
+  name       = "stop-dev-asg"
   group_name = "default"
 
   schedule_expression = "cron(0 20 ? * MON-FRI *)"
@@ -50,18 +53,45 @@ resource "aws_scheduler_schedule" "stop_dev_environment" {
   }
 
   target {
-    arn      = "arn:aws:scheduler:::aws-sdk:ec2:stopInstances"
+    arn      = "arn:aws:scheduler:::aws-sdk:autoscaling:updateAutoScalingGroup"
     role_arn = aws_iam_role.scheduler_role.arn
 
     input = jsonencode({
-      InstanceIds = [module.ec2_dev.instance_id]
+      AutoScalingGroupName = module.asg.asg_name
+      MinSize              = 0
+      DesiredCapacity      = 0
     })
   }
 }
 
-# 4. Regla para ENCENDER a las 7:00 AM (Lunes a Viernes)
-resource "aws_scheduler_schedule" "start_dev_environment" {
-  name       = "start-dev-resources"
+# 3.2 Apagar Base de Datos RDS
+resource "aws_scheduler_schedule" "stop_dev_rds" {
+  name       = "stop-dev-rds"
+  group_name = "default"
+
+  schedule_expression = "cron(0 20 ? * MON-FRI *)"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:rds:stopDBInstance"
+    role_arn = aws_iam_role.scheduler_role.arn
+
+    input = jsonencode({
+      DbInstanceIdentifier = module.rds_dev.db_instance_id # Asegúrate de que este output exista en tu modulo rds
+    })
+  }
+}
+
+# ==========================================
+# 4. ACCIONES DE ENCENDIDO (7:00 AM Lunes-Viernes)
+# ==========================================
+
+# 4.1 Encender Base de Datos RDS (Primero la BD para que las APIS encuentren conexión)
+resource "aws_scheduler_schedule" "start_dev_rds" {
+  name       = "start-dev-rds"
   group_name = "default"
 
   schedule_expression = "cron(0 7 ? * MON-FRI *)"
@@ -71,11 +101,34 @@ resource "aws_scheduler_schedule" "start_dev_environment" {
   }
 
   target {
-    arn      = "arn:aws:scheduler:::aws-sdk:ec2:startInstances"
+    arn      = "arn:aws:scheduler:::aws-sdk:rds:startDBInstance"
     role_arn = aws_iam_role.scheduler_role.arn
 
     input = jsonencode({
-      InstanceIds = [module.ec2_dev.instance_id]
+      DbInstanceIdentifier = module.rds_dev.db_instance_id
+    })
+  }
+}
+
+# 4.2 Encender Servidores Web (Seta ASG en 1)
+resource "aws_scheduler_schedule" "start_dev_asg" {
+  name       = "start-dev-asg"
+  group_name = "default"
+
+  schedule_expression = "cron(5 7 ? * MON-FRI *)" # Levanta a las 7:05 AM tras arrancar la BD
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:autoscaling:updateAutoScalingGroup"
+    role_arn = aws_iam_role.scheduler_role.arn
+
+    input = jsonencode({
+      AutoScalingGroupName = module.asg.asg_name
+      MinSize              = 1
+      DesiredCapacity      = 1
     })
   }
 }
