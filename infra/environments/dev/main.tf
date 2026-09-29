@@ -41,7 +41,7 @@ module "ecr" {
 }
 # modulo EC2 (SG, AMI, KEY SSH, ENTRADAS POR SUBNET PUBLICAS A ALB Y PRIVADAS )
 module "ec2" {
-  source          = "./modules/ec2"
+  source          = "../../modules/ec2"
   environment     = var.environment
   vpc_id          = module.network.vpc_id
   public_key_path = var.public_key_path
@@ -49,7 +49,7 @@ module "ec2" {
 
 #MODULO APPLICATION LOAD BALANCER 
 module "alb" {
-  source                = "./modules/alb"
+  source                = "../../modules/alb"
   environment           = var.environment
   vpc_id                = module.network.vpc_id
   public_subnet_ids     = module.network.public_subnet_ids
@@ -57,7 +57,7 @@ module "alb" {
 }
 #MODULO AUTOSCALLING GROUP
 module "asg" {
-  source                = "./modules/asg"
+  source                = "../../modules/asg"
   environment           = var.environment
   vpc_id                = module.network.vpc_id
   private_subnet_ids    = module.network.private_subnet_ids
