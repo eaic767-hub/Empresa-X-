@@ -14,7 +14,7 @@ module "rds_dev" {
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
   private_subnet_ids    = [module.vpc_dev.private_subnet_id, module.vpc_dev.public_subnet_id]
-  ec2_security_group_id = module.ec2_dev.security_group_id
+  ec2_security_group_id = module.ec2.ec2_security_group_id
   db_name               = var.db_name
   db_user               = var.db_user
   db_password           = var.db_password
@@ -43,7 +43,7 @@ module "ecr" {
 module "ec2" {
   source          = "../../modules/ec2"
   environment     = var.environment
-  vpc_id          = module.network.vpc_id
+  vpc_id          = module.vpc_dev.vpc_id
   public_key_path = var.public_key_path
 }
 
@@ -51,8 +51,8 @@ module "ec2" {
 module "alb" {
   source                = "../../modules/alb"
   environment           = var.environment
-  vpc_id                = module.network.vpc_id
-  public_subnet_ids     = module.network.public_subnet_ids
+  vpc_id                = module.vpc_dev.vpc_id
+  public_subnet_ids     = module.vpc_dev.public_subnet_ids
   alb_security_group_id = module.ec2.alb_security_group_id
 }
 #MODULO AUTOSCALLING GROUP
@@ -60,7 +60,7 @@ module "asg" {
   source                = "../../modules/asg"
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnets_id    = module.network.private_subnets_id
+  private_subnets_id    = module.vpc_dev.private_subnets_id
   target_group_arn      = module.alb.target_group_arn
   ami_id                = module.ec2.ami_id
   instance_type         = var.instance_type
