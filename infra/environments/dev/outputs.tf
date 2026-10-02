@@ -3,11 +3,6 @@ output "vpc_id" {
   value = module.vpc_dev.vpc_id
 }
 
-output "backend_public_ip" {
-  description = "IP publica del servidor EC2 para despliegue de APIs"
-  value       = module.ec2_dev.server_public_ip
-}
-
 #---BASE DE DATOS (RDS)---
 output "rds_endpoint" {
   description = "Endpoint de conexión para la Base de Datos RDS"
@@ -35,4 +30,9 @@ output "cloudfront_distribution_id" {
 output "ecr_repository_url" {
   description = "URL del repositorio ECR para subir imagenes"
   value       = module.ecr.repository_url
+}
+
+output "backend_public_ip" {
+  description = "IP publica de la instancia EC2 backend"
+  value       = module.ec2.server_public_ip
 }
