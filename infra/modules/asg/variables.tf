@@ -9,8 +9,7 @@ variable "vpc_id" {
 }
 
 variable "private_subnet_ids" {
-  description = "Lista de subredes privadas"
-  type        = list(string)
+  type = list(string)
 }
 
 variable "target_group_arn" {

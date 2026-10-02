@@ -9,8 +9,7 @@ variable "vpc_id" {
 }
 
 variable "private_subnet_ids" {
-  type        = list(string)
-  description = "Lista de IDs de subredes privadas para el Subnet Group de la BD"
+  type = list(string)
 }
 
 variable "ec2_security_group_id" {

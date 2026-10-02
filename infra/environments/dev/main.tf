@@ -13,7 +13,7 @@ module "rds_dev" {
 
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnet_ids    = [module.vpc_dev.private_subnet_id, module.vpc_dev.public_subnet_id]
+  private_subnet_ids    = [module.vpc_dev.private_subnet_ids, module.vpc_dev.public_subnet_id]
   ec2_security_group_id = module.ec2.ec2_security_group_id
   db_name               = var.db_name
   db_user               = var.db_user
@@ -52,7 +52,7 @@ module "alb" {
   source                = "../../modules/alb"
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  public_subnets_ids    = module.vpc_dev.public_subnet_ids
+  public_subnet_ids     = module.vpc_dev.public_subnet_ids
   alb_security_group_id = module.ec2.alb_security_group_id
 }
 # MODULO AUTOSCALLING GROUP
@@ -60,7 +60,7 @@ module "asg" {
   source                = "../../modules/asg"
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnet_ids    = module.vpc_dev.private_subnets_id # 👈 Cambiado a "private_subnets_id"
+  private_subnet_ids    = module.vpc_dev.private_subnet_ids
   target_group_arn      = module.alb.target_group_arn
   ami_id                = module.ec2.ami_id
   instance_type         = var.instance_type
