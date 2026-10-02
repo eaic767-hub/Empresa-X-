@@ -6,7 +6,7 @@ output "public_subnet_id" {
   value = aws_subnet.public_subnet.id
 }
 
-output "private_subnet_id" {
+output "private_subnets_id" {
   description = "ID de la subred privada"
   value       = aws_subnet.private_subnet.id
 }
