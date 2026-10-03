@@ -26,7 +26,7 @@ resource "aws_launch_template" "web" {
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
         apt-get install -y nginx
-        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment}</h1>" > /var/www/html/index.html
+        echo "<h1>Servidor Web Nginx - Entorno: $${var.environment}</h1>" > /var/www/html/index.html
         systemctl enable --now nginx
         EOF
   )
