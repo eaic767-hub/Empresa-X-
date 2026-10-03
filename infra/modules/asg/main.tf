@@ -48,7 +48,7 @@ resource "aws_launch_template" "web" {
 # 2. Grupo de Auto Escalado (ASG)
 resource "aws_autoscaling_group" "web_asg" {
   name_prefix         = "asg-${var.environment}-"
-  vpc_zone_identifier = var.public_subnet_ids # Subredes públicas para tener salida por Internet Gateway
+  vpc_zone_identifier = var.private_subnet_ids # Subredes públicas para tener salida por Internet Gateway
   target_group_arns   = [var.target_group_arn]
 
   min_size         = var.min_size
