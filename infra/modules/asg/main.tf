@@ -1,11 +1,11 @@
-#1. Plantilla de Lanzamiento (Sustituye el aws_instance individual)
+# 1. Plantilla de Lanzamiento (Sustituye el aws_instance individual)
 resource "aws_launch_template" "web" {
   name_prefix   = "lt-${var.environment}-"
   image_id      = var.ami_id
   instance_type = var.instance_type
   key_name      = var.key_name
 
-  #DISCO GP3
+  # DISCO GP3
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
@@ -15,18 +15,19 @@ resource "aws_launch_template" "web" {
     }
   }
 
+  # Asignación de IP pública para permitir salida a Internet (descarga de paquetes/Nginx)
   network_interfaces {
-    associate_public_ip_address = false #subredes privadas detras del ALB
+    associate_public_ip_address = true
     security_groups             = [var.ec2_security_group_id]
   }
 
-  # Script de User data en codificación base 64 para Launch Template
+  # Script de User data limpio para el despliegue de Nginx
   user_data = base64encode(<<-EOF
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
         apt-get install -y nginx
-        echo "<h1>Servidor Web Nginx - Entorno: $${var.environment}</h1>" > /var/www/html/index.html
+        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment}</h1>" > /var/www/html/index.html
         systemctl enable --now nginx
         EOF
   )
@@ -44,10 +45,10 @@ resource "aws_launch_template" "web" {
   }
 }
 
-#2 . Grupo de Auto Escalado (ASG)
+# 2. Grupo de Auto Escalado (ASG)
 resource "aws_autoscaling_group" "web_asg" {
   name_prefix         = "asg-${var.environment}-"
-  vpc_zone_identifier = var.private_subnet_ids
+  vpc_zone_identifier = var.public_subnet_ids # Subredes públicas para tener salida por Internet Gateway
   target_group_arns   = [var.target_group_arn]
 
   min_size         = var.min_size
@@ -55,7 +56,7 @@ resource "aws_autoscaling_group" "web_asg" {
   desired_capacity = var.desired_capacity
 
   force_delete              = true
-  health_check_type         = "ELB" #Revisa el estado de salud a traves del ELB
+  health_check_type         = "ELB" # Revisa el estado de salud a través del ELB
   health_check_grace_period = 300
 
   launch_template {
