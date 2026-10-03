@@ -9,12 +9,11 @@ module "vpc_dev" {
 }
 
 module "rds_dev" {
-  source = "../../modules/rds"
-
+  source                = "../../modules/rds"
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnet_ids    = module.vpc_dev.private_subnet_ids
   ec2_security_group_id = module.ec2.ec2_security_group_id
+  private_subnet_ids    = concat(module.vpc_dev.private_subnet_ids, module.vpc_dev.public_subnet_ids)
   db_name               = var.db_name
   db_user               = var.db_user
   db_password           = var.db_password
