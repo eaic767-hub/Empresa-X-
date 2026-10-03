@@ -40,6 +40,22 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
     origin_id                = "S3-${aws_s3_bucket.frontend.id}"
   }
 
+  #Origen 2: Application Load Balancer para llamadas al Backend (/api/*)
+  dynamic "origin" {
+    for_each = var.alb_dns_name != "" ? [1] : []
+    content {
+      domain_name = var.alb_dns_name
+      origin_id = "ALB-Backend"
+
+      custom_origin_config {
+        http_port = 80
+        https_port = 443
+        origin_protocol_policy = "http-only" #CloudFront le habla al ALB por HTTP en la red de AWS
+        origin_ssl_protocols = ["TLSv1.2"]
+      }
+    }
+  }
+
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
@@ -58,6 +74,30 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
     max_ttl                = 86400
   }
 
+  #Cache Behavior para el API: Redirigimos /api/* directo al ALB
+  dynamic "ordered_cache_behavior" {
+    for_each = var.alb_dns_name != "" ? [1] : []
+    content {
+      path_pattern = "/api/*"
+      allowed_methods = ["DELETE","GET","HEAD","OPTIONS","PATCH","POST","PUT"]
+      cached_methods = ["GET","HEAD"]
+      target_origin_id = "ALB-Backend"
+
+      forwarded_values {
+        query_string = true
+        headers = ["Authorization","Host","Accept"."Content-Type"]
+        cookies {
+          forward = "all"
+        }
+      }
+
+      viewer_protocol_policy = "redirect-to-https"
+      min_ttl = 0
+      default_ttl = 0 #No guarda cache de las respuestas de la API
+      max_ttl = 0
+    }
+  }
+  
   #manejo de rutas para Single Page Applications (React, Vue, Next)
   custom_error_response {
     error_code         = 404

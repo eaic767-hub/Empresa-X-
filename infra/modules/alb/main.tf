@@ -59,7 +59,7 @@ resource "aws_lb_listener" "http" {
       content {
         port        = "443"
         protocol    = "HTTPS"
-        status_code = "HTTPS_301"
+        status_code = "HTTP_301"
       }
     }
 

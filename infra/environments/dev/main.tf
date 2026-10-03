@@ -23,8 +23,9 @@ module "rds_dev" {
 module "frontend" {
   source = "../../modules/s3_frontend"
 
-  environment = var.environment
-  bucket_name = "frontend-empresax-pp-dev-2026"
+  environment  = var.environment
+  bucket_name  = "frontend-empresax-pp-dev-2026"
+  alb_dns_name = module.alb.alb_dns_name #Conexion de ALB Con CloudFront
 }
 
 #modulo de ECR (DOCKER, DOCKERCOMPOSE AND MODULE ECR)
