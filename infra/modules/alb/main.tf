@@ -26,7 +26,7 @@ resource "aws_lb_target_group" "this" {
 
   health_check {
     enabled             = true
-    path                = var.health_check_path
+    path                = "/"
     protocol            = "HTTP"
     port                = "traffic-port"
     interval            = 30
