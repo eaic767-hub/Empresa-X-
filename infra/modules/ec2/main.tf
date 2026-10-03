@@ -14,7 +14,7 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_key_pair" "web_key" {
-  key_name   = "${var.environment}-web-key-v3"
+  key_name   = "${var.environment}-web-key-v4"
   public_key = file(var.public_key_path)
 }
 

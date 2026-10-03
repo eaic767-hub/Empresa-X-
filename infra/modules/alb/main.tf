@@ -18,7 +18,7 @@ resource "aws_lb" "this" {
 
 #2. Creación del Target Group (Grupo Objetivo)
 resource "aws_lb_target_group" "this" {
-  name        = "tg-${var.environment}-backend"
+  name        = "tg-${var.environment}-backend-v2"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
