@@ -32,7 +32,8 @@ output "ecr_repository_url" {
   value       = module.ecr.repository_url
 }
 
-output "backend_public_ip" {
-  description = "IP publica de la instancia EC2 backend"
-  value       = module.ec2.server_public_ip
+output "alb_dns_name" {
+  description = "DNS del Load Balancer"
+  value       = module.alb.alb_dns_name
 }
+

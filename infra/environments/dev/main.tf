@@ -13,7 +13,7 @@ module "rds_dev" {
 
   environment           = var.environment
   vpc_id                = module.vpc_dev.vpc_id
-  private_subnet_ids    = [module.vpc_dev.private_subnet_ids, module.vpc_dev.public_subnet_id]
+  private_subnet_ids    = module.vpc_dev.private_subnet_id
   ec2_security_group_id = module.ec2.ec2_security_group_id
   db_name               = var.db_name
   db_user               = var.db_user
