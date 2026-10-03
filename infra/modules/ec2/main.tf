@@ -14,8 +14,12 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_key_pair" "web_key" {
-  key_name   = "${var.environment}-web-key-v4"
-  public_key = file(var.public_key_path)
+  key_name_prefix = "deployer-key-${var.environment}-"
+  public_key      = file(var.public_key_path)
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "alb_sg" {

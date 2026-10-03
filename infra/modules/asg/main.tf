@@ -17,7 +17,7 @@ resource "aws_launch_template" "web" {
 
   # Asignación de IP pública para permitir salida a Internet (descarga de paquetes/Nginx)
   network_interfaces {
-    associate_public_ip_address = true
+    associate_public_ip_address = false
     security_groups             = [var.ec2_security_group_id]
   }
 
@@ -27,7 +27,7 @@ resource "aws_launch_template" "web" {
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
         apt-get install -y nginx
-        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment}</h1>" > /var/www/html/index.html
+        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment} (Subred Privada + NAT)</h1>" > /var/www/html/index.html
         systemctl enable --now nginx
         EOF
   )
@@ -48,7 +48,7 @@ resource "aws_launch_template" "web" {
 # 2. Grupo de Auto Escalado (ASG)
 resource "aws_autoscaling_group" "web_asg" {
   name_prefix         = "asg-${var.environment}-"
-  vpc_zone_identifier = var.private_subnet_ids # Subredes públicas para tener salida por Internet Gateway
+  vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [var.target_group_arn]
 
   min_size         = var.min_size
