@@ -9,7 +9,7 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "Nombre DNS publico del ALB para acceder a la app (HTTP / HTTPS)"
+  description = "Nombre DNS del ALB"
   value       = aws_lb.this.dns_name
 }
 
