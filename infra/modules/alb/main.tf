@@ -51,7 +51,7 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = var.certificate_arn != "" ? "redirect" : "foward"
+    type = var.certificate_arn != "" ? "redirect" : "forward"
 
     #Si hay certificado, fuerza la redirección segura 301
     dynamic "redirect" {
