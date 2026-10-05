@@ -6,7 +6,7 @@ locals {
   engine_version         = var.engine_version != null ? var.engine_version : local.default_engine_version
 
   #Si no se envía contraseña, se usa la generada en Terraform
-  master_password = var.db_password != "" ? var.db_password : ramdom_password.rds_password.result
+  master_password = var.db_password != "" ? var.db_password : random_password.rds_password.result
 }
 
 #2. Generación de Contraseña aleatoria segura
@@ -19,13 +19,12 @@ resource "ramdom_password" "rds_password" {
 #3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
 resource "aws_secretsmanager_secret" "db_credentials" {
   name                    = "${var.environment}-${var.engine}-db-credentials"
-recovery_window_in_days = var.environment == "prod" ? 30 : 0 # IMPORTANTE, EN DEV Y STAGING DESTRUYE AUTOMATICAMENTE LAS SECRETS MANAGER, EN PROD TARDA 30 DIAS
-}
+  recovery_window_in_days = var.environment == "prod" ? 30 : 0 # IMPORTANTE, EN DEV Y STAGING DESTRUYE AUTOMATICAMENTE LAS SECRETS MANAGER, EN PROD TARDA 30 DIAS.
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials_val" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsondecode({
+  secret_string = jsonencode({
     engine   = var.engine
     host     = aws_db_instance.this.address
     port     = local.db_port
