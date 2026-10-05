@@ -10,7 +10,7 @@ locals {
 }
 
 #2. Generación de Contraseña aleatoria segura
-resource "ramdom_password" "rds_password" {
+resource "random_password" "rds_password" {
   length           = 16
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
