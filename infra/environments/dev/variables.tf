@@ -37,4 +37,5 @@ variable "db_password" {
   type        = string
   description = "Contraseña de la BD"
   sensitive   = true #OJO IMPORTANTE PORQUE NO MUESTRA EL TEXTO PLANO EN CONSOLA O TRAZAS EN TERRAFORM APPLY 
+  default     = ""
 }

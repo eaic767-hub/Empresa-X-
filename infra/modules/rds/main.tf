@@ -1,27 +1,63 @@
-#1. Grupo de Subredes para RDS (Exige almenos subredes en la VPC)
+#1. Determinación de Puerto y Versión por defecto segun motor
+locals {
+  db_port = var.engine == "postgres" ? 5432 : 3306
+
+  default_engine_version = var.engine == "postgres" ? "15" : "8.0"
+  engine_version         = var.engine_version != null ? var.engine_version : local.default_engine_version
+
+  #Si no se envía contraseña, se usa la generada en Terraform
+  master_password = var.db_password != "" ? var.db_password : ramdom_password.rds_password.result
+}
+
+#2. Generación de Contraseña aleatoria segura
+resource "ramdom_password" "rds_password" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+#3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name                    = "${var.environment}-${var.engine}-db-credentials"
+recovery_window_in_days = var.environment == "prod" ? 30 : 0 # IMPORTANTE, EN DEV Y STAGING DESTRUYE AUTOMATICAMENTE LAS SECRETS MANAGER, EN PROD TARDA 30 DIAS
+}
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials_val" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsondecode({
+    engine   = var.engine
+    host     = aws_db_instance.this.address
+    port     = local.db_port
+    username = var.db_user
+    password = local.master_password
+    database = var.db_name
+  })
+}
+
+#4. Grupo de Subredes para RDS
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "${var.environment}-rds-subnet-group"
-  subnet_ids = var.private_subnet_ids #<-- SUBRED PRIVADA DEFINIDA EN VPC
+  subnet_ids = var.private_subnet_ids
 
   tags = {
     Name        = "${var.environment}-rds-subnet-group"
-    environment = var.environment
+    Environment = var.environment
   }
 }
 
-#2. SG exclusivo para la BD
+#5. Security Group dinamico segun el puerto del motor seleccionado
 resource "aws_security_group" "rds_sg" {
-  name        = "${var.environment}-rds-sg"
-  description = "Permitir trafico solo desde el servidor web EC2"
+  name        = "${var.environment}-${var.engine}-rds-sg"
+  description = "Permitir trafico ${var.engine} solo desde las EC2 del ASG"
   vpc_id      = var.vpc_id
 
-  #REGLA DE ENTRADA : solo permite el puerto 5432 desde el SG de la EC2
   ingress {
-    description     = "Acceso PostgreSQL desde EC2"
-    from_port       = 5432
-    to_port         = 5432
+    description     = "Acceso ${var.engine} desde EC2"
+    from_port       = local.db_port
+    to_port         = local.db_port
     protocol        = "tcp"
-    security_groups = [var.ec2_security_group_id] # <-- Aislamiento de Seguridad Real
+    security_groups = [var.ec2_security_group_id]
   }
 
   egress {
@@ -32,27 +68,29 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name        = "${var.environment}-rds-sg"
+    Name        = "${var.environment}-${var.engine}-rds-sg"
     Environment = var.environment
   }
 }
 
-#3. Instancia de DB PostgreSQL (Engine Gratuito/Micro)
-resource "aws_db_instance" "postgres" {
-  allocated_storage      = 20 #ese 20 es el almacenamiento de la SSD
-  max_allocated_storage  = 100
+#6. Instancia unificada de RDS Multi-Engine
+resource "aws_db_instance" "this" {
+  identifier             = "${var.environment}-${var.engine}-db"
+  allocated_storage      = var.allocated_storage
+  max_allocated_storage  = var.max_allocated_storage
   db_name                = var.db_name
-  engine                 = "postgres"
-  engine_version         = "15"
-  instance_class         = "db.t3.micro"
+  engine                 = var.engine
+  engine_version         = local.engine_version
+  instance_class         = var.instance_class
   username               = var.db_user
-  password               = var.db_password
+  password               = local.master_password
+  port                   = local.db_port
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   skip_final_snapshot    = true
 
   tags = {
-    Name        = "${var.environment}-postgres-db"
+    Name        = "${var.environment}-${var.engine}-db"
     Environment = var.environment
   }
 }

@@ -14,9 +14,11 @@ module "rds_dev" {
   vpc_id                = module.vpc_dev.vpc_id
   ec2_security_group_id = module.ec2.ec2_security_group_id
   private_subnet_ids    = module.vpc_dev.private_subnet_ids
-  db_name               = var.db_name
-  db_user               = var.db_user
-  db_password           = var.db_password
+  #motor dinamico (si no especifico colocara postgress)
+  engine      = "mysql" # o puede ser "postgre"
+  db_name     = var.db_name
+  db_user     = var.db_user
+  db_password = var.db_password # <-- Al valer "", el módulo sabe que debe generarla solo y guardarla en AWS Secrets Manager ( o se define en terraform.tfvars con un valor fijo a esa contraseña)
 }
 
 #Modulo de Frontend (Almacenamiento S3)
