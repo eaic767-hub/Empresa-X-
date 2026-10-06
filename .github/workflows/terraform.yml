@@ -51,11 +51,11 @@ jobs:
         run: terraform init -upgrade
 
       - name: Terraform Plan
-        run: terraform plan -input=false -no-color || true
+        run: terraform plan -input=false -no-color -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -input=false -auto-approve
+        run: terraform apply -input=false tfplan
 
   docker-build:
     name: "Build & Push Docker Image"
