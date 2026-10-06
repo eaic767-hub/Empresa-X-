@@ -219,6 +219,13 @@ SERVICE
         EOF
   )
 
+  # Esto fuerza a Terraform a destruir y volver a crear la instancia si cambia el user_data
+  lifecycle {
+    replace_triggered_by = [
+      user_data
+    ]
+  }
+
   tags = {
     Name        = "backend-server-${var.environment}"
     Environment = var.environment

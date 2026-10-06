@@ -4,7 +4,7 @@ resource "aws_launch_template" "web" {
   image_id      = var.ami_id
   instance_type = var.instance_type
 
-  #Se asigna el IAM Instance profile para SSM+AWS SDK
+  # Se asigna el IAM Instance profile para SSM + AWS SDK
   iam_instance_profile {
     name = var.instance_profile_name
   }
@@ -19,14 +19,13 @@ resource "aws_launch_template" "web" {
     }
   }
 
-  # Asignación de IP pública para permitir salida a Internet (descarga de paquetes/Nginx)
+  # Asignación de red privada sin IP pública (Usa NAT Gateway)
   network_interfaces {
     associate_public_ip_address = false
     security_groups             = [var.ec2_security_group_id]
   }
 
-  # Script de User data limpio para el despliegue de Nginx
-  # Script de User data limpio para el despliegue de Nginx con Node Exporter
+  # Script de User data para el despliegue de Nginx con Node Exporter
   user_data = base64encode(<<-EOF
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
@@ -39,7 +38,7 @@ resource "aws_launch_template" "web" {
 
         # 2. Instalación de Node Exporter para Prometheus
         NODE_EXPORTER_VERSION="1.7.0"
-        useradd --no-create-home --shell /bin/false node_exporter || true
+        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
         cd /tmp
         curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
@@ -98,6 +97,15 @@ resource "aws_autoscaling_group" "web_asg" {
   launch_template {
     id      = aws_launch_template.web.id
     version = "$Latest"
+  }
+
+  # ROTACIÓN AUTOMÁTICA DE INSTANCIAS AL ACTUALIZAR USER_DATA / LAUNCH TEMPLATE
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+    triggers = ["tag", "launch_template"]
   }
 
   tag {
