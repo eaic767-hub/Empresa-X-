@@ -30,9 +30,40 @@ resource "aws_launch_template" "web" {
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get install -y nginx
+        apt-get install -y nginx curl
+
+        # 1. Configuración de Nginx
         echo "<h1>Servidor Web Nginx - Entorno: ${var.environment} (Subred Privada + NAT)</h1>" > /var/www/html/index.html
         systemctl enable --now nginx
+
+        # 2. Instalación de Node Exporter para Prometheus
+        NODE_EXPORTER_VERSION="1.7.0"
+        useradd --no-create-home --shell /bin/false node_exporter
+
+        cd /tmp
+        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        tar -xvf "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        mv "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
+        chown node_exporter:node_exporter /usr/local/bin/node_exporter
+
+        # 3. Crear Servicio Systemd para Node Exporter
+        cat <<SERVICE > /etc/systemd/system/node_exporter.service
+        [Unit]
+        Description=Node Exporter
+        After=network.target
+
+        [Service]
+        User=node_exporter
+        Group=node_exporter
+        Type=simple
+        ExecStart=/usr/local/bin/node_exporter
+
+        [Install]
+        WantedBy=multi-user.target
+        SERVICE
+
+        systemctl daemon-reload
+        systemctl enable --now node_exporter
         EOF
   )
 

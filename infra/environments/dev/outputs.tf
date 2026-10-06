@@ -37,3 +37,14 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
+# Outputs de Monitoreo
+output "grafana_dashboard_url" {
+  description = "Acceso directo al panel de Grafana"
+  value       = module.monitoring.grafana_url
+}
+
+output "prometheus_dashboard_url" {
+  description = "Acceso directo a la consola de Prometheus"
+  value       = module.monitoring.prometheus_url
+}
+

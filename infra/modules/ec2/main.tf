@@ -14,10 +14,10 @@ data "aws_ami" "ubuntu" {
 }
 
 #------------------------------------------------------------------------------
-#IAM ROLE + INSTANCE PROFILE (SSM &AWS SDK para Backend)
-#-------------------------------------------------------------------------------
+# IAM ROLE + INSTANCE PROFILE (SSM, SDK, ECR & Prometheus EC2 SD)
+#------------------------------------------------------------------------------
 
-#1. Rol de IAM que asumiran las instancias EC2
+# 1. Rol de IAM que asumirán las instancias EC2
 resource "aws_iam_role" "backend_role" {
   name = "ec2-backend-role-${var.environment}"
 
@@ -39,7 +39,7 @@ resource "aws_iam_role" "backend_role" {
   }
 }
 
-#2. Politica para permitir que el Backend 8via AWS SDK ) lea de Secrets Manager
+# 2. Política para permitir que el Backend (vía AWS SDK) lea de Secrets Manager
 resource "aws_iam_policy" "backend_sdk_policy" {
   name        = "ec2-backend-sdk-policy-${var.environment}"
   description = "Permisos de AWS SDK para que el backend pueda leer Secrets Manager"
@@ -65,13 +65,25 @@ resource "aws_iam_role_policy_attachment" "attach_sdk" {
   policy_arn = aws_iam_policy.backend_sdk_policy.arn
 }
 
-# 4. Adjuntar política administrada de SSM (Conexión segura sin SSH / sin key pair)
+# 4. Adjuntar política administrada de SSM (Permite conexión por Session Manager sin llaves SSH)
 resource "aws_iam_role_policy_attachment" "attach_ssm" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 5. Instance Profile para pasarle este Rol a las EC2
+# 5. Adjuntar política administrada de ECR (Permite hacer pull de imágenes Docker)
+resource "aws_iam_role_policy_attachment" "attach_ecr" {
+  role       = aws_iam_role.backend_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# 6. Adjuntar política de lectura de EC2 (Permite a Prometheus consultar la API de AWS para ec2_sd_configs)
+resource "aws_iam_role_policy_attachment" "attach_ec2_read" {
+  role       = aws_iam_role.backend_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+}
+
+# 7. Instance Profile para pasarle este Rol a las EC2
 resource "aws_iam_instance_profile" "backend_profile" {
   name = "ec2-backend-profile-${var.environment}"
   role = aws_iam_role.backend_role.name
@@ -130,6 +142,16 @@ resource "aws_security_group" "web_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
+  #TRAFICO DE MONITOREO: Node Exporter para Prometheus (solo interno de VPC)
+
+  ingress {
+    description = "Node Exporter para Prometheus"
+    from_port   = 9100
+    to_port     = 9100
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr] # LA DECLARADA EN LA VPC en variables
+  }
+
   #SALIDA A INTERNET (Para descargar contenedores de ECR y actualizar paquetes)
   egress {
     description = "Salida total a Internet"
@@ -143,5 +165,24 @@ resource "aws_security_group" "web_sg" {
     Name        = "web-sg-${var.environment}"
     Environment = var.environment
     VpcId       = var.vpc_id
+  }
+}
+
+#------------------------------------------------------------------------------
+# EC2 INSTANCE / LAUNCH TEMPLATE EXAMPLE
+#------------------------------------------------------------------------------
+
+resource "aws_instance" "backend" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro" # Ajusta según necesidad
+  subnet_id              = var.private_subnet_id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+
+  # Importante: Asignación del Instance Profile con SSM y permisos SDK
+  iam_instance_profile = aws_iam_instance_profile.backend_profile.name
+
+  tags = {
+    Name        = "backend-server-${var.environment}"
+    Environment = var.environment
   }
 }

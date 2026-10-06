@@ -21,3 +21,13 @@ variable "root_volume_size" {
   type        = number
   default     = 8
 }
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.0.0.0/16"
+}
+
+variable "private_subnet_id" {
+  type        = string
+  description = "ID de la subred privada donde se desplegará la instancia"
+}

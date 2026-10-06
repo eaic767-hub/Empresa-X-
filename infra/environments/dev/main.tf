@@ -43,10 +43,11 @@ module "ecr" {
 }
 # modulo EC2 (SG, AMI, KEY SSH, ENTRADAS POR SUBNET PUBLICAS A ALB Y PRIVADAS )
 module "ec2" {
-  source          = "../../modules/ec2"
-  environment     = var.environment
-  vpc_id          = module.vpc_dev.vpc_id
-  public_key_path = var.public_key_path
+  source            = "../../modules/ec2"
+  environment       = var.environment
+  vpc_id            = module.vpc_dev.vpc_id
+  public_key_path   = var.public_key_path
+  private_subnet_id = module.vpc_dev.private_subnet_ids
 }
 
 #MODULO APPLICATION LOAD BALANCER 
@@ -69,4 +70,15 @@ module "asg" {
   instance_profile_name = module.ec2.instance_profile_name
   ec2_security_group_id = module.ec2.ec2_security_group_id
   root_volume_size      = var.root_volume_size
+}
+
+#MODULO DE MONITOREO PROMETHEUS +GRAFANA
+module "monitoring" {
+  source                = "../../modules/monitoring"
+  environment           = var.environment
+  vpc_id                = module.vpc.vpc_id
+  vpc_cidr              = module.vpc.vpc_cidr
+  public_subnet_id      = module.vpc.public_subnet_ids[0]
+  ami_id                = module.ec2.ubuntu_ami_id
+  instance_profile_name = module.ec2.instance_profile_name
 }
