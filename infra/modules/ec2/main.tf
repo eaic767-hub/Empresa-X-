@@ -174,12 +174,50 @@ resource "aws_security_group" "web_sg" {
 
 resource "aws_instance" "backend" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro" # Ajusta según necesidad
+  instance_type          = "t3.micro"
   subnet_id              = var.private_subnet_id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
 
   # Importante: Asignación del Instance Profile con SSM y permisos SDK
   iam_instance_profile = aws_iam_instance_profile.backend_profile.name
+
+  # USER DATA: Instalación automática de Node Exporter
+  user_data = base64encode(<<-EOF
+        #!/bin/bash
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get install -y curl
+
+        # Instalación de Node Exporter
+        NODE_EXPORTER_VERSION="1.7.0"
+        useradd --no-create-home --shell /bin/false node_exporter || true
+
+        cd /tmp
+        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
+        tar -xvf "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
+        mv "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64/node_exporter" /usr/local/bin/
+        chown node_exporter:node_exporter /usr/local/bin/node_exporter
+
+        # Crear Servicio Systemd
+        cat <<SERVICE > /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+        systemctl daemon-reload
+        systemctl enable --now node_exporter
+        EOF
+  )
 
   tags = {
     Name        = "backend-server-${var.environment}"
