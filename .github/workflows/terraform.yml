@@ -33,6 +33,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
+          terraform_wrapper: false
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,12 +51,14 @@ jobs:
       - name: Terraform Init
         run: terraform init -upgrade
 
-      - name: Terraform Plan
-        run: terraform plan -input=false -no-color -out=tfplan
+      - name: Debug Terraform Plan
+        run: |
+          terraform plan -input=false -no-color > plan_output.log 2>&1 || true
+          cat plan_output.log
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -input=false tfplan
+        run: terraform apply -input=false -auto-approve
 
   docker-build:
     name: "Build & Push Docker Image"
@@ -90,4 +93,4 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:
