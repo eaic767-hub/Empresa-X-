@@ -1,5 +1,4 @@
-#SecurityGroup dedicado al servidor de monitoreo
-# SecurityGroup dedicado al servidor de monitoreo
+# Security Group dedicado al servidor de monitoreo
 resource "aws_security_group" "monitoring_sg" {
   name        = "monitoring-sg-${var.environment}"
   description = "Security Group de monitoreo Prometheus & Grafana"
@@ -14,7 +13,7 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Prometheus UI/API (9090) -> Cambiado a 0.0.0.0/0 para acceso desde el navegador
+  # Prometheus UI/API (9090) - Abierto para acceso directo desde la web
   ingress {
     description = "Prometheus Server UI"
     from_port   = 9090
@@ -49,13 +48,15 @@ resource "aws_instance" "monitoring_server" {
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get install -y docker.io docker-compose
+        apt-get install -y docker.io docker-compose curl
         systemctl enable --now docker
 
+        # 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
         mkdir -p /opt/monitoring/grafana/provisioning/datasources
+        mkdir -p /opt/monitoring/grafana/provisioning/dashboards
         cd /opt/monitoring
 
-        # 1. Archivo prometheus.yml
+        # 2. Configurar prometheus.yml
         cat <<CONFIG > prometheus.yml
 global:
   scrape_interval: 15s
@@ -75,7 +76,7 @@ scrape_configs:
         action: keep
 CONFIG
 
-        # 2. Aprovisionar Datasource de Prometheus automáticamente en Grafana
+        # 3. Auto-aprovisionar Datasource de Prometheus en Grafana
         cat <<DATASOURCE > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
@@ -84,9 +85,27 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+    editable: true
 DATASOURCE
 
-        # 3. Archivo docker-compose.yml
+        # 4. Configurar el Provider de Dashboards para Grafana
+        cat <<PROVIDER > grafana/provisioning/dashboards/dashboards.yml
+apiVersion: 1
+providers:
+  - name: 'Default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+PROVIDER
+
+        # 5. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
+        curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
+
+        # 6. Crear docker-compose.yml montando las carpetas de aprovisionamiento
         cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
@@ -111,7 +130,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-        # 4. Levantar los contenedores
+        # 7. Levantar la pila de contenedores
         docker-compose up -d
         EOF
   )
