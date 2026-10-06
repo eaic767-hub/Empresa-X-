@@ -17,7 +17,6 @@ data "aws_ami" "ubuntu" {
 # IAM ROLE + INSTANCE PROFILE (SSM, SDK, ECR & Prometheus EC2 SD)
 #------------------------------------------------------------------------------
 
-# 1. Rol de IAM que asumirán las instancias EC2
 resource "aws_iam_role" "backend_role" {
   name = "ec2-backend-role-${var.environment}"
 
@@ -39,7 +38,6 @@ resource "aws_iam_role" "backend_role" {
   }
 }
 
-# 2. Política para permitir que el Backend (vía AWS SDK) lea de Secrets Manager
 resource "aws_iam_policy" "backend_sdk_policy" {
   name        = "ec2-backend-sdk-policy-${var.environment}"
   description = "Permisos de AWS SDK para que el backend pueda leer Secrets Manager"
@@ -59,31 +57,26 @@ resource "aws_iam_policy" "backend_sdk_policy" {
   })
 }
 
-# 3. Adjuntar política del SDK al Rol
 resource "aws_iam_role_policy_attachment" "attach_sdk" {
   role       = aws_iam_role.backend_role.name
   policy_arn = aws_iam_policy.backend_sdk_policy.arn
 }
 
-# 4. Adjuntar política administrada de SSM
 resource "aws_iam_role_policy_attachment" "attach_ssm" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 5. Adjuntar política administrada de ECR
 resource "aws_iam_role_policy_attachment" "attach_ecr" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# 6. Adjuntar política de lectura de EC2 para Prometheus
 resource "aws_iam_role_policy_attachment" "attach_ec2_read" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
 }
 
-# 7. Instance Profile para pasarle este Rol a las EC2
 resource "aws_iam_instance_profile" "backend_profile" {
   name = "ec2-backend-profile-${var.environment}"
   role = aws_iam_role.backend_role.name
@@ -129,13 +122,11 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
-# Security Group para las instancias EC2 (PRIVADO/PROTEGIDO)
 resource "aws_security_group" "web_sg" {
   name        = "web-server-sg-${var.environment}"
   description = "Permitir trafico exclusivamente desde el ALB y SSH de administracion"
   vpc_id      = var.vpc_id
 
-  # TRAFICO WEB: UNICAMENTE PROVENIENTE DEL ALB
   ingress {
     description     = "HTTP solo desde el ALB"
     from_port       = 80
@@ -144,7 +135,6 @@ resource "aws_security_group" "web_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  # TRAFICO DE MONITOREO: Node Exporter para Prometheus (solo interno de VPC)
   ingress {
     description = "Node Exporter para Prometheus"
     from_port   = 9100
@@ -153,7 +143,6 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = [var.vpc_cidr]
   }
 
-  # SALIDA A INTERNET
   egress {
     description = "Salida total a Internet"
     from_port   = 0
@@ -180,26 +169,23 @@ resource "aws_instance" "backend" {
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.backend_profile.name
 
-  # Recrea la instancia automáticamente al modificar user_data
   user_data_replace_on_change = true
 
   user_data = base64encode(<<-EOF
-        #!/bin/bash
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y curl
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y curl
 
-        # 1. Descarga e instalación de Node Exporter
-        cd /tmp
-        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
-        tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
-        mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
+cd /tmp
+curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
+mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
 
-        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
-        chown node_exporter:node_exporter /usr/local/bin/node_exporter
+useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
+chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-        # 2. Servicio Systemd para Node Exporter
-        cat <<SERVICE > /etc/systemd/system/node_exporter.service
+cat <<SERVICE > /etc/systemd/system/node_exporter.service
 [Unit]
 Description=Node Exporter
 After=network.target
@@ -214,9 +200,9 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 SERVICE
 
-        systemctl daemon-reload
-        systemctl enable --now node_exporter
-        EOF
+systemctl daemon-reload
+systemctl enable --now node_exporter
+EOF
   )
 
   tags = {

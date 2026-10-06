@@ -1,15 +1,13 @@
-# 1. Plantilla de Lanzamiento (Sustituye el aws_instance individual)
+# 1. Plantilla de Lanzamiento
 resource "aws_launch_template" "web" {
   name_prefix   = "lt-${var.environment}-"
   image_id      = var.ami_id
   instance_type = var.instance_type
 
-  # Se asigna el IAM Instance profile para SSM + AWS SDK
   iam_instance_profile {
     name = var.instance_profile_name
   }
 
-  # DISCO GP3
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
@@ -19,34 +17,29 @@ resource "aws_launch_template" "web" {
     }
   }
 
-  # Asignación de red privada sin IP pública
   network_interfaces {
     associate_public_ip_address = false
     security_groups             = [var.ec2_security_group_id]
   }
 
-  # Script de User data para el despliegue de Nginx con Node Exporter
   user_data = base64encode(<<-EOF
-        #!/bin/bash
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y nginx curl
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y nginx curl
 
-        # 1. Configuración de Nginx
-        echo "<h1>Servidor Web Nginx - Entorno: ${var.environment} (Subred Privada + NAT)</h1>" > /var/www/html/index.html
-        systemctl enable --now nginx
+echo "<h1>Servidor Web Nginx - Entorno: ${var.environment} (Subred Privada + NAT)</h1>" > /var/www/html/index.html
+systemctl enable --now nginx
 
-        # 2. Instalación de Node Exporter para Prometheus
-        cd /tmp
-        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
-        tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
-        mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
+cd /tmp
+curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
+mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
 
-        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
-        chown node_exporter:node_exporter /usr/local/bin/node_exporter
+useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
+chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-        # 3. Crear Servicio Systemd para Node Exporter
-        cat <<SERVICE > /etc/systemd/system/node_exporter.service
+cat <<SERVICE > /etc/systemd/system/node_exporter.service
 [Unit]
 Description=Node Exporter
 After=network.target
@@ -61,9 +54,9 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 SERVICE
 
-        systemctl daemon-reload
-        systemctl enable --now node_exporter
-        EOF
+systemctl daemon-reload
+systemctl enable --now node_exporter
+EOF
   )
 
   tag_specifications {
@@ -98,7 +91,6 @@ resource "aws_autoscaling_group" "web_asg" {
     version = "$Latest"
   }
 
-  # Rotación automática de instancias al actualizar user_data / Launch Template
   instance_refresh {
     strategy = "Rolling"
     preferences {
