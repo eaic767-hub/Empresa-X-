@@ -72,13 +72,13 @@ module "asg" {
   root_volume_size      = var.root_volume_size
 }
 
-#MODULO DE MONITOREO PROMETHEUS +GRAFANA
+# MODULO DE MONITOREO PROMETHEUS + GRAFANA
 module "monitoring" {
   source                = "../../modules/monitoring"
   environment           = var.environment
-  vpc_id                = module.vpc.vpc_id
-  vpc_cidr              = module.vpc.vpc_cidr
-  public_subnet_id      = module.vpc.public_subnet_ids[0]
-  ami_id                = module.ec2.ubuntu_ami_id
+  vpc_id                = module.vpc_dev.vpc_id
+  vpc_cidr              = module.vpc_dev.vpc_cidr
+  public_subnet_id      = module.vpc_dev.public_subnet_ids[0]
+  ami_id                = module.ec2.ami_id
   instance_profile_name = module.ec2.instance_profile_name
 }
