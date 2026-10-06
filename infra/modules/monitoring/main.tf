@@ -45,19 +45,19 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile   = var.instance_profile_name
 
   user_data = base64encode(<<-EOF
-        #!/bin/bash
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y docker.io docker-compose curl
-        systemctl enable --now docker
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y docker.io docker-compose curl
+systemctl enable --now docker
 
-        # 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
-        mkdir -p /opt/monitoring/grafana/provisioning/datasources
-        mkdir -p /opt/monitoring/grafana/provisioning/dashboards
-        cd /opt/monitoring
+# 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
+mkdir -p /opt/monitoring/grafana/provisioning/datasources
+mkdir -p /opt/monitoring/grafana/provisioning/dashboards
+cd /opt/monitoring
 
-        # 2. Configurar prometheus.yml
-        cat <<CONFIG > prometheus.yml
+# 2. Configurar prometheus.yml
+cat <<CONFIG > prometheus.yml
 global:
   scrape_interval: 15s
 
@@ -71,13 +71,24 @@ scrape_configs:
       - region: us-east-1
         port: 9100
     relabel_configs:
+      # Filtrar por entorno (var.environment)
       - source_labels: [__meta_ec2_tag_Environment]
         regex: ${var.environment}
         action: keep
+
+      # Conservar ÚNICAMENTE instancias en estado 'running'
+      - source_labels: [__meta_ec2_instance_state]
+        regex: running
+        action: keep
+
+      # Asignar la IP privada como la etiqueta 'instance' (con su puerto 9100)
+      - source_labels: [__meta_ec2_private_ip]
+        replacement: '$${1}:9100'
+        target_label: instance
 CONFIG
 
-        # 3. Auto-aprovisionar Datasource de Prometheus en Grafana
-        cat <<DATASOURCE > grafana/provisioning/datasources/prometheus.yml
+# 3. Auto-aprovisionar Datasource de Prometheus en Grafana
+cat <<DATASOURCE > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
   - name: Prometheus
@@ -88,8 +99,8 @@ datasources:
     editable: true
 DATASOURCE
 
-        # 4. Configurar el Provider de Dashboards para Grafana
-        cat <<PROVIDER > grafana/provisioning/dashboards/dashboards.yml
+# 4. Configurar el Provider de Dashboards para Grafana
+cat <<PROVIDER > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
   - name: 'Default'
@@ -102,11 +113,11 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
-        # 5. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
-        curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
+# 5. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
+curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-        # 6. Crear docker-compose.yml montando las carpetas de aprovisionamiento
-        cat <<COMPOSE > docker-compose.yml
+# 6. Crear docker-compose.yml montando las carpetas de aprovisionamiento
+cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
   prometheus:
@@ -130,9 +141,9 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-        # 7. Levantar la pila de contenedores
-        docker-compose up -d
-        EOF
+# 7. Levantar la pila de contenedores
+docker-compose up -d
+EOF
   )
 
   tags = {
