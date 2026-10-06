@@ -169,7 +169,7 @@ resource "aws_security_group" "web_sg" {
 }
 
 #------------------------------------------------------------------------------
-# EC2 INSTANCE / LAUNCH TEMPLATE EXAMPLE
+# EC2 INSTANCE / BACKEND
 #------------------------------------------------------------------------------
 
 resource "aws_instance" "backend" {
@@ -181,7 +181,10 @@ resource "aws_instance" "backend" {
   # Importante: Asignación del Instance Profile con SSM y permisos SDK
   iam_instance_profile = aws_iam_instance_profile.backend_profile.name
 
-  # USER DATA: Instalación automática de Node Exporter
+  # Fuerza la recreación automática de la EC2 si cambia el user_data
+  user_data_replace_on_change = true
+
+  # Script de User Data con Node Exporter
   user_data = base64encode(<<-EOF
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
@@ -190,7 +193,7 @@ resource "aws_instance" "backend" {
 
         # Instalación de Node Exporter
         NODE_EXPORTER_VERSION="1.7.0"
-        useradd --no-create-home --shell /bin/false node_exporter || true
+        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
         cd /tmp
         curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
@@ -218,13 +221,6 @@ SERVICE
         systemctl enable --now node_exporter
         EOF
   )
-
-  # Esto fuerza a Terraform a destruir y volver a crear la instancia si cambia el user_data
-  lifecycle {
-    replace_triggered_by = [
-      user_data
-    ]
-  }
 
   tags = {
     Name        = "backend-server-${var.environment}"
