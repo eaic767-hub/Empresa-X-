@@ -71,19 +71,18 @@ scrape_configs:
       - region: us-east-1
         port: 9100
     relabel_configs:
-      # Filtrar por entorno (var.environment)
+      # 1. Filtrar solo instancias del entorno actual
       - source_labels: [__meta_ec2_tag_Environment]
         regex: ${var.environment}
         action: keep
 
-      # Conservar ÚNICAMENTE instancias en estado 'running'
+      # 2. Conservar ÚNICAMENTE instancias activas (elimina las terminadas/apagadas)
       - source_labels: [__meta_ec2_instance_state]
         regex: running
         action: keep
 
-      # Asignar la IP privada como la etiqueta 'instance' (con su puerto 9100)
+      # 3. Mostrar la IP privada limpia como nombre de instancia
       - source_labels: [__meta_ec2_private_ip]
-        replacement: '$${1}:9100'
         target_label: instance
 CONFIG
 
@@ -145,6 +144,7 @@ COMPOSE
 docker-compose up -d
 EOF
   )
+
 
   tags = {
     Name        = "monitoring-server-${var.environment}"
