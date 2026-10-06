@@ -19,7 +19,7 @@ resource "aws_launch_template" "web" {
     }
   }
 
-  # Asignación de red privada sin IP pública (Usa NAT Gateway)
+  # Asignación de red privada sin IP pública
   network_interfaces {
     associate_public_ip_address = false
     security_groups             = [var.ec2_security_group_id]
@@ -37,13 +37,12 @@ resource "aws_launch_template" "web" {
         systemctl enable --now nginx
 
         # 2. Instalación de Node Exporter para Prometheus
-        NODE_EXPORTER_VERSION="1.7.0"
-        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
-
         cd /tmp
-        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
-        tar -xvf "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
-        mv "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64/node_exporter" /usr/local/bin/
+        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
+        mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
+
+        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
         chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
         # 3. Crear Servicio Systemd para Node Exporter
@@ -91,7 +90,7 @@ resource "aws_autoscaling_group" "web_asg" {
   desired_capacity = var.desired_capacity
 
   force_delete              = true
-  health_check_type         = "ELB" # Revisa el estado de salud a través del ELB
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   launch_template {
@@ -99,7 +98,7 @@ resource "aws_autoscaling_group" "web_asg" {
     version = "$Latest"
   }
 
-  # ROTACIÓN AUTOMÁTICA DE INSTANCIAS AL ACTUALIZAR USER_DATA / LAUNCH TEMPLATE
+  # Rotación automática de instancias al actualizar user_data / Launch Template
   instance_refresh {
     strategy = "Rolling"
     preferences {

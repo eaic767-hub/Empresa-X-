@@ -65,19 +65,19 @@ resource "aws_iam_role_policy_attachment" "attach_sdk" {
   policy_arn = aws_iam_policy.backend_sdk_policy.arn
 }
 
-# 4. Adjuntar política administrada de SSM (Permite conexión por Session Manager sin llaves SSH)
+# 4. Adjuntar política administrada de SSM
 resource "aws_iam_role_policy_attachment" "attach_ssm" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 5. Adjuntar política administrada de ECR (Permite hacer pull de imágenes Docker)
+# 5. Adjuntar política administrada de ECR
 resource "aws_iam_role_policy_attachment" "attach_ecr" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# 6. Adjuntar política de lectura de EC2 (Permite a Prometheus consultar la API de AWS para ec2_sd_configs)
+# 6. Adjuntar política de lectura de EC2 para Prometheus
 resource "aws_iam_role_policy_attachment" "attach_ec2_read" {
   role       = aws_iam_role.backend_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
@@ -89,13 +89,15 @@ resource "aws_iam_instance_profile" "backend_profile" {
   role = aws_iam_role.backend_role.name
 }
 
-#SECURITY GROUPS
+#------------------------------------------------------------------------------
+# SECURITY GROUPS
+#------------------------------------------------------------------------------
+
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg-${var.environment}"
   description = "Permitir trafico HTTP y HTTPS desde Internet al ALB"
   vpc_id      = var.vpc_id
 
-  #TRAFICO DE PUERTOS  HTTP Y HTTPS
   ingress {
     description = "Acceso HTTP publico"
     from_port   = 80
@@ -123,17 +125,17 @@ resource "aws_security_group" "alb_sg" {
   tags = {
     Name        = "alb-sg-${var.environment}"
     Environment = var.environment
-    VpcId       = var.vpc_id # <- Etiqueta para que el sg lleve la etiqueta del vpn de despliegue para auditoria
+    VpcId       = var.vpc_id
   }
 }
 
-#4. Security Group para las instancias EC2 (PRIVADO/PROTEGIDO)
+# Security Group para las instancias EC2 (PRIVADO/PROTEGIDO)
 resource "aws_security_group" "web_sg" {
   name        = "web-server-sg-${var.environment}"
   description = "Permitir trafico exclusivamente desde el ALB y SSH de administracion"
   vpc_id      = var.vpc_id
 
-  #TRAFICO WEB: UNICAMENTE PROVENIENTE DEL ALB
+  # TRAFICO WEB: UNICAMENTE PROVENIENTE DEL ALB
   ingress {
     description     = "HTTP solo desde el ALB"
     from_port       = 80
@@ -142,17 +144,16 @@ resource "aws_security_group" "web_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  #TRAFICO DE MONITOREO: Node Exporter para Prometheus (solo interno de VPC)
-
+  # TRAFICO DE MONITOREO: Node Exporter para Prometheus (solo interno de VPC)
   ingress {
     description = "Node Exporter para Prometheus"
     from_port   = 9100
     to_port     = 9100
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr] # LA DECLARADA EN LA VPC en variables
+    cidr_blocks = [var.vpc_cidr]
   }
 
-  #SALIDA A INTERNET (Para descargar contenedores de ECR y actualizar paquetes)
+  # SALIDA A INTERNET
   egress {
     description = "Salida total a Internet"
     from_port   = 0
@@ -177,31 +178,27 @@ resource "aws_instance" "backend" {
   instance_type          = "t3.micro"
   subnet_id              = var.private_subnet_id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.backend_profile.name
 
-  # Importante: Asignación del Instance Profile con SSM y permisos SDK
-  iam_instance_profile = aws_iam_instance_profile.backend_profile.name
-
-  # Fuerza la recreación automática de la EC2 si cambia el user_data
+  # Recrea la instancia automáticamente al modificar user_data
   user_data_replace_on_change = true
 
-  # Script de User Data con Node Exporter
   user_data = base64encode(<<-EOF
         #!/bin/bash
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
         apt-get install -y curl
 
-        # Instalación de Node Exporter
-        NODE_EXPORTER_VERSION="1.7.0"
-        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
-
+        # 1. Descarga e instalación de Node Exporter
         cd /tmp
-        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
-        tar -xvf "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz"
-        mv "node_exporter-$NODE_EXPORTER_VERSION.linux-amd64/node_exporter" /usr/local/bin/
+        curl -LO "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        tar -xvf node_exporter-1.7.0.linux-amd64.tar.gz
+        mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
+
+        useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
         chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-        # Crear Servicio Systemd
+        # 2. Servicio Systemd para Node Exporter
         cat <<SERVICE > /etc/systemd/system/node_exporter.service
 [Unit]
 Description=Node Exporter
