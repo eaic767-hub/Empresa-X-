@@ -47,7 +47,7 @@ module "ec2" {
   environment       = var.environment
   vpc_id            = module.vpc_dev.vpc_id
   public_key_path   = var.public_key_path
-  private_subnet_id = module.vpc_dev.private_subnet_ids
+  private_subnet_id = module.vpc_dev.private_subnet_ids[0]
 }
 
 #MODULO APPLICATION LOAD BALANCER 
