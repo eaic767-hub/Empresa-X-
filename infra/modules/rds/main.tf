@@ -1,21 +1,17 @@
-#1. Determinación de Puerto y Versión por defecto segun motor
+# 1. Determinación de Puerto, Versión y Contraseña
 locals {
   db_port = var.engine == "postgres" ? 5432 : 3306
 
   default_engine_version = var.engine == "postgres" ? "15" : "8.0"
   engine_version         = var.engine_version != null ? var.engine_version : local.default_engine_version
 
-  #Si no se envía contraseña, se usa la generada en Terraform
-  master_password = var.db_password != "" ? var.db_password : random_password.rds_password.result
+  # Si no se envía contraseña, genera una clave aleatoria segura usando la función nativa uuid()
+  # (No requiere ningún provider externo ni conexión a Internet)
+  auto_password   = "Pass_${substr(uuid(), 0, 12)}!"
+  master_password = var.db_password != "" ? var.db_password : local.auto_password
 }
 
-#2. Generación de Contraseña aleatoria segura
-resource "random_password" "rds_password" {
-  length           = 16
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
+# (Se elimina por completo el bloque resource "random_password" "rds_password")
 #3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
 resource "aws_secretsmanager_secret" "db_credentials" {
   name                    = "${var.environment}-${var.engine}-db-credentials"

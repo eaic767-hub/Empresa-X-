@@ -66,7 +66,7 @@ module "asg" {
   target_group_arn      = module.alb.target_group_arn
   ami_id                = module.ec2.ami_id
   instance_type         = var.instance_type
-  key_name              = module.ec2.key_name
+  instance_profile_name = module.ec2.instance_profile_name
   ec2_security_group_id = module.ec2.ec2_security_group_id
   root_volume_size      = var.root_volume_size
 }

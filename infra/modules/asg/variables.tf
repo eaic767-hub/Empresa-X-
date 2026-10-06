@@ -28,8 +28,8 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
-variable "key_name" {
-  description = "Nombre de la clave SSH para el acceso"
+variable "instance_profile_name" {
+  description = "Nombre de Instance Profile para asociar a la EC2"
   type        = string
 }
 
@@ -61,3 +61,4 @@ variable "desired_capacity" {
   type        = number
   default     = 1
 }
+

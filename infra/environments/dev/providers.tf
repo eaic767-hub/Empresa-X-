@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.0.0"
 
   required_providers {
     aws = {
@@ -8,7 +8,6 @@ terraform {
     }
   }
 
-  # CONFIGURACIÓN DE BACKEND REMOTO 
   backend "s3" {
     bucket  = "terraform-bucket-empresax-2026-v1"
     key     = "dev/terraform.tfstate"

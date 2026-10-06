@@ -3,7 +3,11 @@ resource "aws_launch_template" "web" {
   name_prefix   = "lt-${var.environment}-"
   image_id      = var.ami_id
   instance_type = var.instance_type
-  key_name      = var.key_name
+
+  #Se asigna el IAM Instance profile para SSM+AWS SDK
+  iam_instance_profile {
+    name = var.instance_profile_name
+  }
 
   # DISCO GP3
   block_device_mappings {

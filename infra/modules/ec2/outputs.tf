@@ -3,9 +3,14 @@ output "ami_id" {
   value       = data.aws_ami.ubuntu.id
 }
 
-output "key_name" {
-  description = "Nombre de la clave SSH registrada"
-  value       = aws_key_pair.web_key.key_name
+output "instance_profile_name" {
+  value       = aws_iam_instance_profile.backend_profile.name
+  description = "Nombre de la Instance Profile para la EC2"
+}
+
+output "backend_role_arn" {
+  value       = aws_iam_role.backend_role.arn
+  description = "ARN del rol de IAM para el backend"
 }
 
 output "ec2_security_group_id" {
