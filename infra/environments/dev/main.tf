@@ -6,7 +6,6 @@ module "vpc_dev" {
   private_subnet_cidr = "10.0.2.0/24"
   environment         = var.environment
   aws_region          = var.aws_region
-  depends_on          = [module.asg, module.ec2]
 }
 
 module "rds_dev" {
@@ -71,7 +70,6 @@ module "asg" {
   instance_profile_name = module.ec2.instance_profile_name
   ec2_security_group_id = module.ec2.ec2_security_group_id
   root_volume_size      = var.root_volume_size
-  depends_on            = [module.ec2]
 }
 
 # MODULO DE MONITOREO PROMETHEUS + GRAFANA
