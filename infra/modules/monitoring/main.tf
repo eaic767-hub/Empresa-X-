@@ -81,7 +81,7 @@ scrape_configs:
         regex: ${var.environment}
         action: keep
 
-      # 2. Conservar ÚNICAMENTE instancias activas (elimina las terminadas/apagadas al instante)
+      # 2. Conservar ÚNICAMENTE instancias activas
       - source_labels: [__meta_ec2_instance_state]
         regex: running
         action: keep
@@ -126,7 +126,7 @@ PROVIDER
 # 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 7. Crear docker-compose.yml con las comillas corregidas y el volumen mapeado
+# 7. Crear docker-compose.yml incluyendo Prometheus, Grafana y Node Exporter integrado
 cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
@@ -145,6 +145,17 @@ services:
     ports:
       - "9090:9090"
 
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: always
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -157,7 +168,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-# 8. Levantar la pila de contenedores de forma automatizada
+# 8. Levantar la pila completa de contenedores
 docker-compose up -d
 EOF
   )
