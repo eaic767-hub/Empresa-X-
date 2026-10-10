@@ -59,7 +59,8 @@ cd /opt/monitoring
 # 2. Configurar prometheus.yml
 cat <<CONFIG > prometheus.yml
 global:
-  scrape_interval: 15s
+  scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -129,6 +130,11 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=1h'             # <-- Retención corta de 1 hora para desarrollo
+      - '--web.enable-lifecycle
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
