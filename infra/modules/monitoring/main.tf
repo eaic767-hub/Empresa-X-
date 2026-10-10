@@ -23,7 +23,7 @@ resource "aws_security_group" "monitoring_sg" {
   }
 
   egress {
-    description = "Salida total para scraping de EC2s en la VPC"
+    description = "Salida total para scraping"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -60,7 +60,7 @@ cd /opt/monitoring
 # 2. Configurar permisos iniciales para la persistencia de Prometheus
 chmod -R 777 data/prometheus
 
-# 3. Configurar prometheus.yml
+# 3. Configurar prometheus.yml con targets directos y estables
 cat <<CONFIG > prometheus.yml
 global:
   scrape_interval: 5s
@@ -72,29 +72,8 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   - job_name: 'node_exporter'
-    ec2_sd_configs:
-      - region: us-east-1
-        port: 9100
-    relabel_configs:
-      # 1. Filtrar solo instancias del entorno actual
-      - source_labels: [__meta_ec2_tag_Environment]
-        regex: ${var.environment}
-        action: keep
-
-      # 2. Conservar ÚNICAMENTE instancias activas
-      - source_labels: [__meta_ec2_instance_state]
-        regex: running
-        action: keep
-
-      # 3. Asignar la IP privada explícitamente como la dirección de destino del scrape
-      - source_labels: [__meta_ec2_private_ip]
-        target_label: __address__
-        replacement: '$${1}:9100'
-
-      # 4. Mostrar la IP privada limpia como nombre de instancia
-      - source_labels: [__meta_ec2_private_ip]
-        target_label: instance
-        replacement: '$${1}'
+    static_configs:
+      - targets: ['node_exporter:9100']
 CONFIG
 
 # 4. Auto-aprovisionar Datasource de Prometheus en Grafana
@@ -126,7 +105,7 @@ PROVIDER
 # 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 7. Crear docker-compose.yml incluyendo Prometheus, Grafana y Node Exporter integrado
+# 7. Crear docker-compose.yml con Prometheus, Node Exporter y Grafana integrados
 cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
