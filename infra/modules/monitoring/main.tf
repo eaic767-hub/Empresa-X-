@@ -54,9 +54,13 @@ systemctl enable --now docker
 # 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
 mkdir -p /opt/monitoring/grafana/provisioning/datasources
 mkdir -p /opt/monitoring/grafana/provisioning/dashboards
+mkdir -p /opt/monitoring/data/prometheus
 cd /opt/monitoring
 
-# 2. Configurar prometheus.yml
+# 2. Configurar permisos iniciales para la persistencia de Prometheus
+chmod -R 777 data/prometheus
+
+# 3. Configurar prometheus.yml
 cat <<CONFIG > prometheus.yml
 global:
   scrape_interval: 5s
@@ -93,7 +97,7 @@ scrape_configs:
         replacement: '$${1}'
 CONFIG
 
-# 3. Auto-aprovisionar Datasource de Prometheus en Grafana
+# 4. Auto-aprovisionar Datasource de Prometheus en Grafana
 cat <<DATASOURCE > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
@@ -105,7 +109,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 4. Configurar el Provider de Dashboards para Grafana
+# 5. Configurar el Provider de Dashboards para Grafana
 cat <<PROVIDER > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -119,10 +123,10 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
-# 5. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
+# 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 6. Crear docker-compose.yml montando las carpetas de aprovisionamiento
+# 7. Crear docker-compose.yml con las comillas corregidas y el volumen mapeado
 cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
@@ -133,10 +137,11 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=1h'             # <-- Retención corta de 1 hora para desarrollo
-      - '--web.enable-lifecycle
+      - '--storage.tsdb.retention.time=1h'
+      - '--web.enable-lifecycle'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
     ports:
       - "9090:9090"
 
@@ -152,11 +157,10 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-# 7. Levantar la pila de contenedores
+# 8. Levantar la pila de contenedores de forma automatizada
 docker-compose up -d
 EOF
   )
-
 
   tags = {
     Name        = "monitoring-server-${var.environment}"
