@@ -76,14 +76,20 @@ scrape_configs:
         regex: ${var.environment}
         action: keep
 
-      # 2. Conservar ÚNICAMENTE instancias activas (elimina las terminadas/apagadas)
+      # 2. Conservar ÚNICAMENTE instancias activas (elimina las terminadas/apagadas al instante)
       - source_labels: [__meta_ec2_instance_state]
         regex: running
         action: keep
 
-      # 3. Mostrar la IP privada limpia como nombre de instancia
+      # 3. Asignar la IP privada explícitamente como la dirección de destino del scrape
+      - source_labels: [__meta_ec2_private_ip]
+        target_label: __address__
+        replacement: '$${1}:9100'
+
+      # 4. Mostrar la IP privada limpia como nombre de instancia
       - source_labels: [__meta_ec2_private_ip]
         target_label: instance
+        replacement: '$${1}'
 CONFIG
 
 # 3. Auto-aprovisionar Datasource de Prometheus en Grafana
