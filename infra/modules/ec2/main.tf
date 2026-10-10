@@ -151,6 +151,11 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #Añado tiempo de espera para que terraform no colapse si AWS tarda en soltar dependencias
+  timeouts {
+    delete = "20m"
+  }
+
   tags = {
     Name        = "web-sg-${var.environment}"
     Environment = var.environment
