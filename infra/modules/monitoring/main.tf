@@ -44,6 +44,8 @@ resource "aws_instance" "monitoring_server" {
   vpc_security_group_ids = [aws_security_group.monitoring_sg.id]
   iam_instance_profile   = var.instance_profile_name
 
+  user_data_replace_on_change = true
+
   user_data = base64encode(<<-EOF
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
