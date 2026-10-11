@@ -78,25 +78,27 @@ scrape_configs:
       - region: ${var.aws_region}
         port: 9100
     relabel_configs:
-      # 1. Filtrar solo instancias que pertenezcan al entorno actual (dev/prod)
+      # 1. Filtrar solo instancias del entorno actual
       - source_labels: [__meta_ec2_tag_Environment]
         regex: ${var.environment}
         action: keep
 
-      # 2. Conservar únicamente instancias que se encuentren corriendo ('running')
+      # 2. Conservar únicamente instancias activas
       - source_labels: [__meta_ec2_instance_state]
         regex: running
         action: keep
 
-      # 3. Asignar la IP privada de la instancia de forma explícita al target de Prometheus
+      # 3. Formatear la IP privada combinándola con el puerto 9100 de forma segura
       - source_labels: [__meta_ec2_private_ip]
+        regex: (.*)
         target_label: __address__
-        replacement: '$${1}:9100'
+        replacement: '$1:9100'
 
-      # 4. Asignar la IP privada limpia como etiqueta 'instance' para visualización clara
+      # 4. Mostrar la IP privada limpia como nombre de la instancia
       - source_labels: [__meta_ec2_private_ip]
+        regex: (.*)
         target_label: instance
-        replacement: '$${1}'
+        replacement: '$1'
 CONFIG
 
 # 4. Auto-aprovisionar Datasource de Prometheus en Grafana
