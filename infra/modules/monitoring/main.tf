@@ -60,7 +60,7 @@ cd /opt/monitoring
 # 2. Configurar permisos iniciales para la persistencia de Prometheus
 chmod -R 777 data/prometheus
 
-# 3. Configurar prometheus.yml con targets directos y estables
+# 3. Configurar prometheus.yml con auto-descubrimiento EC2 blindado
 cat <<CONFIG > prometheus.yml
 global:
   scrape_interval: 5s
@@ -72,8 +72,29 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   - job_name: 'node_exporter'
-    static_configs:
-      - targets: ['node_exporter:9100']
+    ec2_sd_configs:
+      - region: ${var.aws_region}
+        port: 9100
+    relabel_configs:
+      # 1. Filtrar solo instancias que pertenezcan al entorno actual (dev/prod)
+      - source_labels: [__meta_ec2_tag_Environment]
+        regex: ${var.environment}
+        action: keep
+
+      # 2. Conservar únicamente instancias que se encuentren corriendo ('running')
+      - source_labels: [__meta_ec2_instance_state]
+        regex: running
+        action: keep
+
+      # 3. Asignar la IP privada de la instancia de forma explícita al target de Prometheus
+      - source_labels: [__meta_ec2_private_ip]
+        target_label: __address__
+        replacement: '$${1}:9100'
+
+      # 4. Asignar la IP privada limpia como etiqueta 'instance' para visualización clara
+      - source_labels: [__meta_ec2_private_ip]
+        target_label: instance
+        replacement: '$${1}'
 CONFIG
 
 # 4. Auto-aprovisionar Datasource de Prometheus en Grafana
@@ -105,7 +126,7 @@ PROVIDER
 # 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 7. Crear docker-compose.yml con Prometheus, Node Exporter y Grafana integrados
+# 7. Crear docker-compose.yml con Prometheus y Grafana (sin contenedores huerfanos de node_exporter local)
 cat <<COMPOSE > docker-compose.yml
 version: '3.8'
 services:
@@ -124,17 +145,6 @@ services:
     ports:
       - "9090:9090"
 
-  node_exporter:
-    image: prom/node-exporter:latest
-    container_name: node_exporter
-    restart: always
-    ports:
-      - "9100:9100"
-    command:
-      - '--path.rootfs=/host'
-    volumes:
-      - /:/host:ro,rslave
-
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -147,7 +157,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-# 8. Levantar la pila completa de contenedores
+# 8. Levantar la pila completa de contenedores de forma automatizada
 docker-compose up -d
 EOF
   )

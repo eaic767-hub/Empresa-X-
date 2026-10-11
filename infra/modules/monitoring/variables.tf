@@ -33,3 +33,9 @@ variable "instance_type" {
   description = "Tipo de instancia EC2"
   default     = "t3.small" # t3.small es ideal para correr Prometheus + Grafana juntos
 }
+
+variable "aws_region" {
+  description = "Region AWS"
+  type        = string
+  default     = "us-east-1"
+}
