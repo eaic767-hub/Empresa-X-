@@ -62,8 +62,8 @@ cd /opt/monitoring
 # 2. Configurar permisos iniciales para la persistencia de Prometheus
 chmod -R 777 data/prometheus
 
-# 3. Configurar prometheus.yml con auto-descubrimiento EC2 blindado
-cat <<CONFIG > prometheus.yml
+# 3. Configurar prometheus.yml con auto-descubrimiento EC2 blindado (Usando 'CONFIG' con comillas simples para proteger los $1)
+cat << 'CONFIG' > prometheus.yml
 global:
   scrape_interval: 5s
   evaluation_interval: 5s
@@ -72,7 +72,7 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-  
+
   - job_name: 'node_exporter'
     ec2_sd_configs:
       - region: ${var.aws_region}
@@ -88,21 +88,21 @@ scrape_configs:
         regex: running
         action: keep
 
-      # 3. Formatear la IP privada combinándola con el puerto 9100 de forma segura (escapando con $$)
+      # 3. Formatear la IP privada combinándola con el puerto 9100
       - source_labels: [__meta_ec2_private_ip]
         regex: (.*)
         target_label: __address__
-        replacement: '$$1:9100'
+        replacement: '$1:9100'
 
       # 4. Mostrar la IP privada limpia como nombre de la instancia
       - source_labels: [__meta_ec2_private_ip]
         regex: (.*)
         target_label: instance
-        replacement: '$$1'
+        replacement: '$1'
 CONFIG
 
 # 4. Auto-aprovisionar Datasource de Prometheus en Grafana
-cat <<DATASOURCE > grafana/provisioning/datasources/prometheus.yml
+cat << 'DATASOURCE' > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
   - name: Prometheus
@@ -114,7 +114,7 @@ datasources:
 DATASOURCE
 
 # 5. Configurar el Provider de Dashboards para Grafana
-cat <<PROVIDER > grafana/provisioning/dashboards/dashboards.yml
+cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
   - name: 'Default'
@@ -130,8 +130,8 @@ PROVIDER
 # 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 7. Crear docker-compose.yml con Prometheus y Grafana (sin contenedores huerfanos de node_exporter local)
-cat <<COMPOSE > docker-compose.yml
+# 7. Crear docker-compose.yml con Prometheus y Grafana
+cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
   prometheus:
