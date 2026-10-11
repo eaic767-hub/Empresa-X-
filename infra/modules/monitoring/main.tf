@@ -72,7 +72,7 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-
+  
   - job_name: 'node_exporter'
     ec2_sd_configs:
       - region: ${var.aws_region}
@@ -88,17 +88,17 @@ scrape_configs:
         regex: running
         action: keep
 
-      # 3. Formatear la IP privada combinándola con el puerto 9100 de forma segura
+      # 3. Formatear la IP privada combinándola con el puerto 9100 de forma segura (escapando con $$)
       - source_labels: [__meta_ec2_private_ip]
         regex: (.*)
         target_label: __address__
-        replacement: '$1:9100'
+        replacement: '$$1:9100'
 
       # 4. Mostrar la IP privada limpia como nombre de la instancia
       - source_labels: [__meta_ec2_private_ip]
         regex: (.*)
         target_label: instance
-        replacement: '$1'
+        replacement: '$$1'
 CONFIG
 
 # 4. Auto-aprovisionar Datasource de Prometheus en Grafana
