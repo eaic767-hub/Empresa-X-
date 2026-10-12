@@ -14,7 +14,7 @@ locals {
 # (Se elimina por completo el bloque resource "random_password" "rds_password")
 #3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "${var.environment}-${var.engine}-db-credentials"
+  name                    = "dev-mysql-db-credentials-${var.environment}-${var.engine}-db-credentials"
   recovery_window_in_days = var.environment == "prod" ? 30 : 0 # IMPORTANTE, EN DEV Y STAGING DESTRUYE AUTOMATICAMENTE LAS SECRETS MANAGER, EN PROD TARDA 30 DIAS.
 }
 
@@ -32,7 +32,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials_val" {
 
 #4. Grupo de Subredes para RDS
 resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = "${var.environment}-rds-subnet-group"
+  name       = "dev-rds-subnet-group-${var.environment}-rds-subnet-group"
   subnet_ids = var.private_subnet_ids
 
   tags = {
