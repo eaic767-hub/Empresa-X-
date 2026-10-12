@@ -88,5 +88,5 @@ module "monitoring" {
 module "EKS" {
   source      = "../../modules/EKS"
   environment = var.environment
-  subnet_ids  = [module.vpc_dev.public_subnet_ids]
+  subnet_ids  = module.vpc_dev.public_subnet_ids
 }
