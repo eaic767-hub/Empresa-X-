@@ -82,3 +82,11 @@ module "monitoring" {
   ami_id                = module.ec2.ami_id
   instance_profile_name = module.ec2.instance_profile_name
 }
+
+#MODULO DE K8S EKS
+
+module "EKS" {
+  source      = "../../modules/EKS"
+  environment = var.environment
+  subnet_ids  = [module.vpc_dev.public_subnet_ids]
+}

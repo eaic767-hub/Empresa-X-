@@ -2,9 +2,9 @@ name: "Terraform & Docker CI/CD Pipeline"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/*", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
 
 jobs:
   terraform:
@@ -48,17 +48,26 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check
 
-      - name: Terraform Init
-        run: terraform init -upgrade
+      - name: Terraform Init (Dynamic Sandbox State)
+        run: |
+          # Si estamos en main usa el estado oficial, si estamos en otra rama usa tu sandbox personal
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STATE_KEY="dev/terraform.tfstate"
+          else
+            STATE_KEY="sandbox/emanuel/terraform.tfstate"
+          fi
+          echo "Using Terraform State Key: $STATE_KEY"
+          terraform init -upgrade -backend-config="key=$STATE_KEY"
 
-      - name: Debug Terraform Plan
+      - name: Terraform Plan
         run: |
           terraform plan -input=false -no-color > plan_output.log 2>&1 || true
           cat plan_output.log
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Terraform Apply (Auto in Sandbox / Controlled in Main)
         run: |
+          # Si es tu rama de pruebas o main, ejecuta el apply para que puedas validar tus pruebas end-to-end
+          echo "Ejecutando Terraform Apply..."
           terraform apply -input=false -auto-approve -no-color > apply_output.log 2>&1 || true
           cat apply_output.log
           if grep -q "Error:" apply_output.log; then exit 1; fi
@@ -66,7 +75,6 @@ jobs:
   docker-build:
     name: "Build & Push Docker Image"
     needs: terraform
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     defaults:

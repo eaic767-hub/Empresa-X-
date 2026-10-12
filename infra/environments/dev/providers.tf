@@ -10,7 +10,7 @@ terraform {
 
   backend "s3" {
     bucket  = "terraform-bucket-empresax-2026-v1"
-    key     = "dev/terraform.tfstate"
+    key     = "dev/terraform.tfstate" #IMPORTANTE ESTA CLAVE DETERMINA MI ESPACIO DE TRABAJO SIN AFECTAR A LOS DEMAS
     region  = "us-east-1"
     encrypt = true
   }
