@@ -1,6 +1,6 @@
 #1. Bucket S3 para alojar el Frontend
 resource "aws_s3_bucket" "frontend" {
-  bucket        = "${var.bucket_name}-${var.environment}"
+  bucket        = "frontend-empresax-${var.bucket_name}-${var.environment}"
   force_destroy = true #Permite limpiar el bucket si se destruye el entorno teniendo contenido
 
   tags = {
