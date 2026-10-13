@@ -9,3 +9,7 @@ variable "tags" {
   default     = {}
 }
 
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

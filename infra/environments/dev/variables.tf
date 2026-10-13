@@ -39,3 +39,9 @@ variable "db_password" {
   sensitive   = true #OJO IMPORTANTE PORQUE NO MUESTRA EL TEXTO PLANO EN CONSOLA O TRAZAS EN TERRAFORM APPLY 
   default     = ""
 }
+
+variable "resource_prefix" {
+  type        = string
+  description = "Prefijo unico para aislar recursos en sandbox o pruebas"
+  default     = ""
+}

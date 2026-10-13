@@ -18,3 +18,8 @@ variable "environment" {
 variable "aws_region" {
   type = string
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

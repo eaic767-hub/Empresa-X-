@@ -70,3 +70,8 @@ variable "db_password" {
   description = "Contraseña de la BD"
   sensitive   = true #OJO IMPORTANTE PORQUE NO MUESTRA EL TEXTO PLANO EN CONSOLA O TRAZAS EN TERRAFORM APPLY 
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

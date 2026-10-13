@@ -6,62 +6,71 @@ module "vpc_dev" {
   private_subnet_cidr = "10.0.2.0/24"
   environment         = var.environment
   aws_region          = var.aws_region
+  resource_prefix     = var.resource_prefix # <--- Pasamos el prefijo
 }
 
 module "rds_dev" {
   source                = "../../modules/rds"
   environment           = var.environment
+  resource_prefix       = var.resource_prefix # <--- Pasamos el prefijo
   vpc_id                = module.vpc_dev.vpc_id
   ec2_security_group_id = module.ec2.ec2_security_group_id
   private_subnet_ids    = module.vpc_dev.private_subnet_ids
-  #motor dinamico (si no especifico colocara postgress)
-  engine      = "mysql" # o puede ser "postgre"
+
+  engine      = "mysql"
   db_name     = var.db_name
   db_user     = var.db_user
-  db_password = var.db_password # <-- Al valer "", el módulo sabe que debe generarla solo y guardarla en AWS Secrets Manager ( o se define en terraform.tfvars con un valor fijo a esa contraseña)
+  db_password = var.db_password
 }
 
-#Modulo de Frontend (Almacenamiento S3)
+# Modulo de Frontend (Almacenamiento S3)
 module "frontend" {
   source = "../../modules/s3_frontend"
 
-  environment  = var.environment
-  bucket_name  = "frontend-empresax-pp-dev-2026"
-  alb_dns_name = module.alb.alb_dns_name #Conexion de ALB Con CloudFront
+  environment     = var.environment
+  resource_prefix = var.resource_prefix         # <--- Pasamos el prefijo
+  bucket_name     = "frontend-empresax-pp-2026" # Base genérica, el módulo le agregará el sufijo dinámico
+  alb_dns_name    = module.alb.alb_dns_name
 }
 
-#modulo de ECR (DOCKER, DOCKERCOMPOSE AND MODULE ECR)
+# Modulo de ECR
 module "ecr" {
   source = "../../modules/ecr"
 
-  repository_name = "empresa-x-backend-dev"
+  repository_name = "empresa-x-backend"
+  resource_prefix = var.resource_prefix # <--- Pasamos el prefijo
 
   tags = {
-    Environment = "dev"
+    Environment = var.environment
     Project     = "EmpresaX"
   }
 }
-# modulo EC2 (SG, AMI, KEY SSH, ENTRADAS POR SUBNET PUBLICAS A ALB Y PRIVADAS )
+
+# Modulo EC2
 module "ec2" {
   source            = "../../modules/ec2"
   environment       = var.environment
+  resource_prefix   = var.resource_prefix # <--- Pasamos el prefijo
   vpc_id            = module.vpc_dev.vpc_id
   public_key_path   = var.public_key_path
   private_subnet_id = module.vpc_dev.private_subnet_ids[0]
 }
 
-#MODULO APPLICATION LOAD BALANCER 
+# Modulo APPLICATION LOAD BALANCER 
 module "alb" {
   source                = "../../modules/alb"
   environment           = var.environment
+  resource_prefix       = var.resource_prefix # <--- Pasamos el prefijo
   vpc_id                = module.vpc_dev.vpc_id
   public_subnet_ids     = module.vpc_dev.public_subnet_ids
   alb_security_group_id = module.ec2.alb_security_group_id
 }
-# MODULO AUTOSCALLING GROUP
+
+# Modulo AUTOSCALING GROUP
 module "asg" {
   source                = "../../modules/asg"
   environment           = var.environment
+  resource_prefix       = var.resource_prefix # <--- Pasamos el prefijo
   vpc_id                = module.vpc_dev.vpc_id
   private_subnet_ids    = module.vpc_dev.private_subnet_ids
   target_group_arn      = module.alb.target_group_arn
@@ -72,10 +81,11 @@ module "asg" {
   root_volume_size      = var.root_volume_size
 }
 
-# MODULO DE MONITOREO PROMETHEUS + GRAFANA
+# Modulo DE MONITOREO PROMETHEUS + GRAFANA
 module "monitoring" {
   source                = "../../modules/monitoring"
   environment           = var.environment
+  resource_prefix       = var.resource_prefix # <--- Pasamos el prefijo
   vpc_id                = module.vpc_dev.vpc_id
   vpc_cidr              = module.vpc_dev.vpc_cidr
   public_subnet_id      = module.vpc_dev.public_subnet_ids[0]
@@ -83,10 +93,10 @@ module "monitoring" {
   instance_profile_name = module.ec2.instance_profile_name
 }
 
-#MODULO DE K8S EKS
-
+# Modulo DE K8S EKS
 module "EKS" {
-  source      = "../../modules/EKS"
-  environment = var.environment
-  subnet_ids  = module.vpc_dev.public_subnet_ids
+  source          = "../../modules/EKS"
+  environment     = var.environment
+  resource_prefix = var.resource_prefix # <--- Pasamos el prefijo
+  subnet_ids      = module.vpc_dev.public_subnet_ids
 }

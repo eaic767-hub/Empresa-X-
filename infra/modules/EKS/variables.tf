@@ -7,3 +7,8 @@ variable "subnet_ids" {
   type        = list(string)
   description = "Lista de Ids de Subredes donde se despegara el cluster de EKS"
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

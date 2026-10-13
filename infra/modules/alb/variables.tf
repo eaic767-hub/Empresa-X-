@@ -34,3 +34,8 @@ variable "certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

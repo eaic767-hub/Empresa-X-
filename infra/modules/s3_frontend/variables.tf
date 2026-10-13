@@ -13,3 +13,8 @@ variable "alb_dns_name" {
   type        = string
   default     = ""
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

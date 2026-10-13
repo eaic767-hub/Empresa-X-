@@ -31,3 +31,8 @@ variable "private_subnet_id" {
   type        = string
   description = "ID de la subred privada donde se desplegará la instancia"
 }
+
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}

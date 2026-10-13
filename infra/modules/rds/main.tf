@@ -6,16 +6,14 @@ locals {
   engine_version         = var.engine_version != null ? var.engine_version : local.default_engine_version
 
   # Si no se envía contraseña, genera una clave aleatoria segura usando la función nativa uuid()
-  # (No requiere ningún provider externo ni conexión a Internet)
   auto_password   = "Pass_${substr(uuid(), 0, 12)}!"
   master_password = var.db_password != "" ? var.db_password : local.auto_password
 }
 
-# (Se elimina por completo el bloque resource "random_password" "rds_password")
-#3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
+# 3. Almacenamiento seguro en AWS Secrets Manager (Buenas practicas DevSecOps)
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "dev-mysql-db-credentials-${var.environment}-${var.engine}-db-credentials"
-  recovery_window_in_days = var.environment == "prod" ? 30 : 0 # IMPORTANTE, EN DEV Y STAGING DESTRUYE AUTOMATICAMENTE LAS SECRETS MANAGER, EN PROD TARDA 30 DIAS.
+  name                    = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-db-credentials" : "${var.environment}-${var.engine}-db-credentials"
+  recovery_window_in_days = var.environment == "prod" ? 30 : 0
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials_val" {
@@ -30,20 +28,20 @@ resource "aws_secretsmanager_secret_version" "db_credentials_val" {
   })
 }
 
-#4. Grupo de Subredes para RDS
+# 4. Grupo de Subredes para RDS
 resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = "dev-rds-subnet-group-${var.environment}-rds-subnet-group"
+  name       = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group"
   subnet_ids = var.private_subnet_ids
 
   tags = {
-    Name        = "${var.environment}-rds-subnet-group"
+    Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group"
     Environment = var.environment
   }
 }
 
-#5. Security Group dinamico segun el puerto del motor seleccionado
+# 5. Security Group dinamico segun el puerto del motor seleccionado
 resource "aws_security_group" "rds_sg" {
-  name        = "${var.environment}-${var.engine}-rds-sg"
+  name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-rds-sg" : "${var.environment}-${var.engine}-rds-sg"
   description = "Permitir trafico ${var.engine} solo desde las EC2 del ASG"
   vpc_id      = var.vpc_id
 
@@ -63,14 +61,14 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name        = "${var.environment}-${var.engine}-rds-sg"
+    Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-rds-sg" : "${var.environment}-${var.engine}-rds-sg"
     Environment = var.environment
   }
 }
 
-#6. Instancia unificada de RDS Multi-Engine
+# 6. Instancia unificada de RDS Multi-Engine
 resource "aws_db_instance" "this" {
-  identifier             = "${var.environment}-${var.engine}-db"
+  identifier             = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-db" : "${var.environment}-${var.engine}-db"
   allocated_storage      = var.allocated_storage
   max_allocated_storage  = var.max_allocated_storage
   db_name                = var.db_name
@@ -85,7 +83,7 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot    = true
 
   tags = {
-    Name        = "${var.environment}-${var.engine}-db"
+    Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-db" : "${var.environment}-${var.engine}-db"
     Environment = var.environment
   }
 }

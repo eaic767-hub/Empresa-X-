@@ -1,15 +1,15 @@
-#1. Bucket S3 para alojar el Frontend
+# 1. Bucket S3 para alojar el Frontend
 resource "aws_s3_bucket" "frontend" {
-  bucket        = "frontend-empresax-${var.bucket_name}-${var.environment}"
-  force_destroy = true #Permite limpiar el bucket si se destruye el entorno teniendo contenido
+  bucket        = var.resource_prefix != "" ? "frontend-empresax-${var.resource_prefix}-${var.environment}" : "frontend-empresax-${var.environment}"
+  force_destroy = true
 
   tags = {
-    Name        = "Frontend-Bucket-${var.environment}"
+    Name        = var.resource_prefix != "" ? "Frontend-Bucket-${var.resource_prefix}-${var.environment}" : "Frontend-Bucket-${var.environment}"
     Environment = var.environment
   }
 }
 
-#2. Bloqueo de acceso público directo (Buenas practicas DevSecOps: todo pasa por el CloudFront)
+# 2. Bloqueo de acceso público directo
 resource "aws_s3_bucket_public_access_block" "frontend_public_block" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -19,9 +19,9 @@ resource "aws_s3_bucket_public_access_block" "frontend_public_block" {
   restrict_public_buckets = true
 }
 
-#3. REGISTRO DE AWS CLOUDFRONT OAC
+# 3. REGISTRO DE AWS CLOUDFRONT OAC
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "oac-frontend-empresax-${var.bucket_name}-${var.environment}"
+  name                              = var.resource_prefix != "" ? "oac-frontend-empresax-${var.resource_prefix}-${var.environment}" : "oac-frontend-empresax-${var.environment}"
   description                       = "OAC para acceder a S3 desde CloudFront"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -40,7 +40,6 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
     origin_id                = "S3-${aws_s3_bucket.frontend.id}"
   }
 
-  #Origen 2: Application Load Balancer para llamadas al Backend (/api/*)
   dynamic "origin" {
     for_each = var.alb_dns_name != "" ? [1] : []
     content {
@@ -50,7 +49,7 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
       custom_origin_config {
         http_port              = 80
         https_port             = 443
-        origin_protocol_policy = "http-only" #CloudFront le habla al ALB por HTTP en la red de AWS
+        origin_protocol_policy = "http-only"
         origin_ssl_protocols   = ["TLSv1.2"]
       }
     }
@@ -74,7 +73,6 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
     max_ttl                = 86400
   }
 
-  #Cache Behavior para el API: Redirigimos /api/* directo al ALB
   dynamic "ordered_cache_behavior" {
     for_each = var.alb_dns_name != "" ? [1] : []
     content {
@@ -93,12 +91,11 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
 
       viewer_protocol_policy = "redirect-to-https"
       min_ttl                = 0
-      default_ttl            = 0 #No guarda cache de las respuestas de la API
+      default_ttl            = 0
       max_ttl                = 0
     }
   }
 
-  #manejo de rutas para Single Page Applications (React, Vue, Next)
   custom_error_response {
     error_code         = 404
     response_code      = 200
@@ -122,12 +119,12 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
   }
 
   tags = {
-    Name        = "Frontend-CDN-${var.environment}"
+    Name        = var.resource_prefix != "" ? "Frontend-CDN-${var.resource_prefix}-${var.environment}" : "Frontend-CDN-${var.environment}"
     Environment = var.environment
   }
 }
 
-#5. Politica en S3 para permitir acceso EXCLUSIVO a CloudFront
+# 5. Politica en S3 para permitir acceso EXCLUSIVO a CloudFront
 resource "aws_s3_bucket_policy" "frontend_policy" {
   bucket = aws_s3_bucket.frontend.id
 

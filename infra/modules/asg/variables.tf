@@ -62,3 +62,7 @@ variable "desired_capacity" {
   default     = 1
 }
 
+variable "resource_prefix" {
+  type    = string
+  default = ""
+}
