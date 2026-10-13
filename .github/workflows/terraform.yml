@@ -100,7 +100,8 @@ jobs:
       - name: Build, Tag, and Push Docker Image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: empresa-x-backend-dev
+          # Dinámico según la rama: si es main usa el oficial, sino añade el sufijo -emanuel
+          ECR_REPOSITORY: ${{ github.ref == 'refs/heads/main' && 'empresa-x-backend-dev' || 'empresa-x-backend-dev-emanuel' }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .

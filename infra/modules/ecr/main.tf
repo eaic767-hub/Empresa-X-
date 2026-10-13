@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "this" {
-  name                 = var.repository_name
+  name                 = var.resource_prefix != "" ? "${var.repository_name}-${var.resource_prefix}" : var.repository_name
   image_tag_mutability = "MUTABLE"
 
   force_delete = true
@@ -11,12 +11,12 @@ resource "aws_ecr_repository" "this" {
   tags = merge(
     var.tags,
     {
-      Name = var.repository_name
+      Name = var.resource_prefix != "" ? "${var.repository_name}-${var.resource_prefix}" : var.repository_name
     }
   )
 }
 
-#Regla de cliclo de vida: Elimina imagenes viejas para no acumular costos en AWS
+# Regla de ciclo de vida: Elimina imágenes viejas para no acumular costos en AWS
 resource "aws_ecr_lifecycle_policy" "this" {
   repository = aws_ecr_repository.this.name
 
