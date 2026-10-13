@@ -22,7 +22,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 #El Cluster EKS administrado por AWS
 
 resource "aws_eks_cluster" "main" {
-  name     = "empresa-x-cluster-${var.environment}"
+  name     = var.resource_prefix != "" ? "empresa-x-cluster-${var.resource_prefix}-${var.environment}" : "empresa-x-cluster-${var.environment}"
   role_arn = aws_iam_role.eks_cluster.arn
 
   vpc_config {
