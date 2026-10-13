@@ -18,7 +18,7 @@ data "aws_ami" "ubuntu" {
 #------------------------------------------------------------------------------
 
 resource "aws_iam_role" "backend_role" {
-  name = "ec2-backend-role-${var.environment}"
+  name = var.resource_prefix != "" ? "ec2-backend-role-${var.resource_prefix}-${var.environment}" : "ec2-backend-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,7 +39,7 @@ resource "aws_iam_role" "backend_role" {
 }
 
 resource "aws_iam_policy" "backend_sdk_policy" {
-  name        = "ec2-backend-sdk-policy-${var.environment}"
+  name        = var.resource_prefix != "" ? "ec2-backend-sdk-policy-${var.resource_prefix}-${var.environment}" : "ec2-backend-sdk-policy-${var.environment}"
   description = "Permisos de AWS SDK para que el backend pueda leer Secrets Manager"
 
   policy = jsonencode({
