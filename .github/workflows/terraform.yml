@@ -5,6 +5,16 @@ on:
     branches: [ "main", "feature/*", "dev" ]
   pull_request:
     branches: [ "main", "dev" ]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Acción de Terraform a ejecutar"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
 
 jobs:
   terraform:
@@ -61,22 +71,31 @@ jobs:
           terraform init -upgrade -backend-config="key=$STATE_KEY"
 
       - name: Terraform Plan
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action == 'apply' }}
         run: |
           terraform plan -input=false -no-color > plan_output.log 2>&1 || true
           cat plan_output.log
 
       - name: Terraform Apply (Auto in Sandbox / Controlled in Main)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action == 'apply' }}
         run: |
-          # Si es tu rama de pruebas o main, ejecuta el apply para que puedas validar tus pruebas end-to-end
           echo "Ejecutando Terraform Apply..."
           terraform apply -input=false -auto-approve -no-color > apply_output.log 2>&1 || true
           cat apply_output.log
           if grep -q "Error:" apply_output.log; then exit 1; fi
 
+      - name: Terraform Destroy (Manual Triggered)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'destroy' }}
+        run: |
+          echo "Ejecutando Terraform Destroy para limpiar el sandbox..."
+          terraform destroy -input=false -auto-approve -no-color
+
   docker-build:
     name: "Build & Push Docker Image"
     needs: terraform
     runs-on: ubuntu-latest
+    # Solo construimos la imagen si NO estamos ejecutando un destroy manual
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action != 'destroy' }}
 
     defaults:
       run:
@@ -103,7 +122,6 @@ jobs:
           ECR_REPOSITORY: ${{ github.ref == 'refs/heads/main' && 'empresa-x-backend-dev' || 'empresa-x-backend-dev-emanuel' }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Asegurar que el repositorio ECR exista antes de hacer push (evita el error de name unknown)
           aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region us-east-1 || aws ecr create-repository --repository-name "$ECR_REPOSITORY" --region us-east-1
 
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
