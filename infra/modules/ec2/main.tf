@@ -78,7 +78,7 @@ resource "aws_iam_role_policy_attachment" "attach_ec2_read" {
 }
 
 resource "aws_iam_instance_profile" "backend_profile" {
-  name = "ec2-backend-profile-${var.environment}"
+  name = var.resource_prefix != "" ? "ec2-backend-profile-${var.resource_prefix}-${var.environment}" : "ec2-backend-profile-${var.environment}"
   role = aws_iam_role.backend_role.name
 }
 
@@ -87,7 +87,7 @@ resource "aws_iam_instance_profile" "backend_profile" {
 #------------------------------------------------------------------------------
 
 resource "aws_security_group" "alb_sg" {
-  name        = "alb-sg-${var.environment}"
+  name        = var.resource_prefix != "" ? "alb-sg-${var.resource_prefix}-${var.environment}" : "alb-sg-${var.environment}"
   description = "Permitir trafico HTTP y HTTPS desde Internet al ALB"
   vpc_id      = var.vpc_id
 
@@ -116,14 +116,14 @@ resource "aws_security_group" "alb_sg" {
   }
 
   tags = {
-    Name        = "alb-sg-${var.environment}"
+    Name        = var.resource_prefix != "" ? "alb-sg-${var.resource_prefix}-${var.environment}" : "alb-sg-${var.environment}"
     Environment = var.environment
     VpcId       = var.vpc_id
   }
 }
 
 resource "aws_security_group" "web_sg" {
-  name        = "web-server-sg-${var.environment}"
+  name        = var.resource_prefix != "" ? "web-server-sg-${var.resource_prefix}-${var.environment}" : "web-server-sg-${var.environment}"
   description = "Permitir trafico exclusivamente desde el ALB y SSH de administracion"
   vpc_id      = var.vpc_id
 
@@ -151,13 +151,12 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  #Añado tiempo de espera para que terraform no colapse si AWS tarda en soltar dependencias
   timeouts {
     delete = "20m"
   }
 
   tags = {
-    Name        = "web-sg-${var.environment}"
+    Name        = var.resource_prefix != "" ? "web-server-sg-${var.resource_prefix}-${var.environment}" : "web-server-sg-${var.environment}"
     Environment = var.environment
     VpcId       = var.vpc_id
   }
@@ -211,7 +210,7 @@ EOF
   )
 
   tags = {
-    Name        = "backend-server-${var.environment}"
+    Name        = var.resource_prefix != "" ? "backend-server-${var.resource_prefix}-${var.environment}" : "backend-server-${var.environment}"
     Environment = var.environment
   }
 }

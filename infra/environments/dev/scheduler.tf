@@ -1,6 +1,6 @@
 # 1. Rol IAM para el planificador de AWS (Scheduler)
 resource "aws_iam_role" "scheduler_role" {
-  name = "scheduler-asg-rds-role-${var.environment}"
+  name = var.resource_prefix != "" ? "scheduler-asg-rds-role-${var.resource_prefix}-${var.environment}" : "scheduler-asg-rds-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,7 +18,7 @@ resource "aws_iam_role" "scheduler_role" {
 
 # 2. Permisos de IAM para modificar ASG y detener/iniciar RDS
 resource "aws_iam_role_policy" "scheduler_policy" {
-  name = "scheduler-asg-rds-policy-${var.environment}"
+  name = var.resource_prefix != "" ? "scheduler-asg-rds-policy-${var.resource_prefix}-${var.environment}" : "scheduler-asg-rds-policy-${var.environment}"
   role = aws_iam_role.scheduler_role.id
 
   policy = jsonencode({
@@ -43,7 +43,7 @@ resource "aws_iam_role_policy" "scheduler_policy" {
 
 # 3.1 Apagar Servidores Web (Seta ASG en 0)
 resource "aws_scheduler_schedule" "stop_dev_asg" {
-  name       = "stop-dev-asg"
+  name       = var.resource_prefix != "" ? "stop-${var.resource_prefix}-dev-asg" : "stop-dev-asg"
   group_name = "default"
 
   schedule_expression = "cron(0 20 ? * MON-FRI *)"
@@ -66,7 +66,7 @@ resource "aws_scheduler_schedule" "stop_dev_asg" {
 
 # 3.2 Apagar Base de Datos RDS
 resource "aws_scheduler_schedule" "stop_dev_rds" {
-  name       = "stop-dev-rds"
+  name       = var.resource_prefix != "" ? "stop-${var.resource_prefix}-dev-rds" : "stop-dev-rds"
   group_name = "default"
 
   schedule_expression = "cron(0 20 ? * MON-FRI *)"
@@ -80,7 +80,7 @@ resource "aws_scheduler_schedule" "stop_dev_rds" {
     role_arn = aws_iam_role.scheduler_role.arn
 
     input = jsonencode({
-      DbInstanceIdentifier = module.rds_dev.db_instance_id # Asegúrate de que este output exista en tu modulo rds
+      DbInstanceIdentifier = module.rds_dev.db_instance_id
     })
   }
 }
@@ -91,7 +91,7 @@ resource "aws_scheduler_schedule" "stop_dev_rds" {
 
 # 4.1 Encender Base de Datos RDS (Primero la BD para que las APIS encuentren conexión)
 resource "aws_scheduler_schedule" "start_dev_rds" {
-  name       = "start-dev-rds"
+  name       = var.resource_prefix != "" ? "start-${var.resource_prefix}-dev-rds" : "start-dev-rds"
   group_name = "default"
 
   schedule_expression = "cron(0 7 ? * MON-FRI *)"
@@ -112,10 +112,10 @@ resource "aws_scheduler_schedule" "start_dev_rds" {
 
 # 4.2 Encender Servidores Web (Seta ASG en 1)
 resource "aws_scheduler_schedule" "start_dev_asg" {
-  name       = "start-dev-asg"
+  name       = var.resource_prefix != "" ? "start-${var.resource_prefix}-dev-asg" : "start-dev-asg"
   group_name = "default"
 
-  schedule_expression = "cron(5 7 ? * MON-FRI *)" # Levanta a las 7:05 AM tras arrancar la BD
+  schedule_expression = "cron(5 7 ? * MON-FRI *)"
 
   flexible_time_window {
     mode = "OFF"
