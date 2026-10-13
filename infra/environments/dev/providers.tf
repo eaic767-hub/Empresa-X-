@@ -4,13 +4,13 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "5.31.0"
+      version = "~> 5.31"
     }
   }
 
   backend "s3" {
     bucket  = "terraform-bucket-empresax-2026-v1"
-    key     = "dev/terraform.tfstate" #IMPORTANTE ESTA CLAVE DETERMINA MI ESPACIO DE TRABAJO SIN AFECTAR A LOS DEMAS
+    key     = "dev/terraform.tfstate"
     region  = "us-east-1"
     encrypt = true
   }
