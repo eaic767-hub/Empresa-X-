@@ -1,0 +1,23 @@
+#Practicamente es el encargado de gestionar el ciclo de vida y replicas de pods
+#solventa lo siguiente: Contenedores caidos, quemados o colgados
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-hola-mundo
+  labels:
+    app: hola-mundo
+spec:
+  replicas: 2 # Le ordenamos a K8s mantener exactamente 2 instancias corriendo
+  selector:
+    matchLabels:
+      app: hola-mundo  #Etiqueta para asociar Deployment a Pods
+  template:   #PLANTILLA O RECETA CON LA QUE K8S CREA CADA POD (NOMBRE DE IMAGEN, PUERTO, MOTOR)
+    metadata:
+      labels: #SUPERPEGAMENTO PARA RELACIONAR COMPONENTES
+        app: hola-mundo # Etiqueta crucial para conexion con el Service
+    spec:
+      containers:
+        - name: nginx-contenedor
+          image: nginx:1.25-alpine # Imagen ligera de NGINX para prueba
+          ports:
+          - containerPort: 80 #Puerto interno por donde escucha la app
