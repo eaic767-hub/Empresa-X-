@@ -61,7 +61,6 @@ jobs:
 
       - name: Terraform Init (Dynamic Sandbox State)
         run: |
-          # Si estamos en main usa el estado oficial, si estamos en otra rama usa tu sandbox personal
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             STATE_KEY="dev/terraform.tfstate"
           else
@@ -73,16 +72,13 @@ jobs:
       - name: Terraform Plan
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action == 'apply' }}
         run: |
-          terraform plan -input=false -no-color > plan_output.log 2>&1 || true
-          cat plan_output.log
+          terraform plan -input=false -no-color
 
       - name: Terraform Apply (Auto in Sandbox / Controlled in Main)
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action == 'apply' }}
         run: |
           echo "Ejecutando Terraform Apply..."
-          terraform apply -input=false -auto-approve -no-color > apply_output.log 2>&1 || true
-          cat apply_output.log
-          if grep -q "Error:" apply_output.log; then exit 1; fi
+          terraform apply -input=false -auto-approve -no-color
 
       - name: Terraform Destroy (Manual Triggered)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'destroy' }}
@@ -94,7 +90,6 @@ jobs:
     name: "Build & Push Docker Image"
     needs: terraform
     runs-on: ubuntu-latest
-    # Solo construimos la imagen si NO estamos ejecutando un destroy manual
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action != 'destroy' }}
 
     defaults:
