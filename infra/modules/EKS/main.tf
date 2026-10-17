@@ -32,3 +32,62 @@ resource "aws_eks_cluster" "main" {
     aws_iam_role_policy_attachment.eks_cluster_policy
   ]
 }
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------
+#ROL IAM para los Worker Nodes del Cluster
+#---------------------------------------------------------------------------------------------------------------------------------------------------------
+resource "aws_iam_role" "eks_nodes" {
+  name = var.resource_prefix != "" ? "empresa-x-eks-node-role-${var.resource_prefix}-${var.environment}" : "empresa-x-eks-node-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+#Politicas minimas requeridas por AWS EKS para los nodos de trabajo
+resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_nodes.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_nodes.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_container_registry_readonly" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_nodes.name
+}
+
+# ------------------------------------------------------------------------------
+# EKS Node Group Administrado
+# ------------------------------------------------------------------------------
+resource "aws_eks_node_group" "main" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = var.resource_prefix != "" ? "empresa-x-node-group-${var.resource_prefix}-${var.environment}" : "empresa-x-node-group-${var.environment}"
+  node_role_arn   = aws_iam_role.eks_nodes.arn
+  subnet_ids      = var.subnet_ids
+
+  scaling_config {
+    desired_size = 2
+    max_size     = 3
+    min_size     = 1
+  }
+
+  # Instancias livianas ideales para sandbox / desarrollo
+  instance_types = ["t3.small"]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_node_policy,
+    aws_iam_role_policy_attachment.eks_cni_policy,
+    aws_iam_role_policy_attachment.eks_container_registry_readonly,
+  ]
+}
