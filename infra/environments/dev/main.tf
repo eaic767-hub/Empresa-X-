@@ -98,5 +98,5 @@ module "eks" {
   source          = "../../modules/eks"
   environment     = var.environment
   resource_prefix = var.resource_prefix
-  subnet_ids      = concat(module.vpc_dev.public_subnet_ids, module.vpc_dev.private_subnet_ids)
+  subnet_ids      = module.vpc_dev.public_subnet_ids
 }
