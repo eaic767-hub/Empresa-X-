@@ -33,9 +33,9 @@ resource "aws_eks_cluster" "main" {
   ]
 }
 
-#---------------------------------------------------------------------------------------------------------------------------------------------------------
-#ROL IAM para los Worker Nodes del Cluster
-#---------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Rol IAM para los Worker Nodes del Clúster
+# ------------------------------------------------------------------------------
 resource "aws_iam_role" "eks_nodes" {
   name = var.resource_prefix != "" ? "empresa-x-eks-node-role-${var.resource_prefix}-${var.environment}" : "empresa-x-eks-node-role-${var.environment}"
 
@@ -51,7 +51,6 @@ resource "aws_iam_role" "eks_nodes" {
   })
 }
 
-#Politicas minimas requeridas por AWS EKS para los nodos de trabajo
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
   role       = aws_iam_role.eks_nodes.name
@@ -82,7 +81,6 @@ resource "aws_eks_node_group" "main" {
     min_size     = 1
   }
 
-  # Instancias livianas ideales para sandbox / desarrollo
   instance_types = ["t3.small"]
 
   depends_on = [
