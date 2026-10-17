@@ -48,11 +48,6 @@ output "prometheus_dashboard_url" {
   value       = module.monitoring.prometheus_url
 }
 
-output "cluster_name" {
-  value       = aws_eks_cluster.main.name
-  description = "Nombre del Cluster creado"
-}
-
 output "node_group_status" {
   description = "Estatus del grupo de nodos de EKS"
   value       = module.eks.node_group_status # Asegúrate de que el nombre de tu llamada al módulo sea 'eks'
