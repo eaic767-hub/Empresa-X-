@@ -88,4 +88,8 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_readonly,
   ]
+
+  tags = {
+    Name = "node-group-forced-update"
+  }
 }
