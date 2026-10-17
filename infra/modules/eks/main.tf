@@ -12,6 +12,10 @@ resource "aws_iam_role" "eks_cluster" {
       }
     }]
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
@@ -49,6 +53,10 @@ resource "aws_iam_role" "eks_nodes" {
       }
     }]
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
@@ -84,7 +92,7 @@ resource "aws_eks_node_group" "main" {
   instance_types = ["t3.small"]
 
   depends_on = [
-    aws_eks_cluster.main, # <--- OBLIGATORIO: Esperar a que el cluster esté vivo
+    aws_eks_cluster.main,
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_readonly,

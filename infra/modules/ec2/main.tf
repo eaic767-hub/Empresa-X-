@@ -175,7 +175,7 @@ resource "aws_instance" "backend" {
 
   user_data_replace_on_change = true
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
