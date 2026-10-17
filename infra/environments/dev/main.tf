@@ -94,9 +94,9 @@ module "monitoring" {
 }
 
 # Modulo DE K8S EKS
-module "EKS" {
-  source          = "../../modules/EKS"
+module "eks" {
+  source          = "../../modules/eks"
   environment     = var.environment
-  resource_prefix = var.resource_prefix # <--- Pasamos el prefijo
+  resource_prefix = var.resource_prefix
   subnet_ids      = module.vpc_dev.public_subnet_ids
 }

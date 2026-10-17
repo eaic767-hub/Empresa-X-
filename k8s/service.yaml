@@ -1,0 +1,17 @@
+# Service es una IP Fija/Balanceador de carga
+#Se coloca por delante de los pods, y reparte los mismos
+#a traves de los pods saludables
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-hola-mundo-Service
+spec:
+  type: ClusterIP # Tipo de Servicio: Comunicación interna dentro del cluster
+  selector:
+    app: hola-mundo #Aqui esta la magia, busca los pods con esta misma etiqueta
+  ports:
+  - protocol: TCP
+    port: 80          #Puerto expuesto por el servicio
+    targetPort: 80    # Puerto interno del contenedor al que redirige la petición
+    
