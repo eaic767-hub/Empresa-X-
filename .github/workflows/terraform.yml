@@ -146,8 +146,7 @@ jobs:
 
       - name: Update Kubeconfig for EKS
         run: |
-          aws eks update-kubeconfig --region us-east-1 --name emanuel-dev-eks #Aqui declaro el nombre del cluster y la region OJO
-        
+          aws eks update-kubeconfig --region us-east-1 --name empresa-x-cluster-emanuel-dev
       - name: Apply Kubernetes Manifests
         run: |
           echo "Aplicando manifiestos de Kubernetes..."
