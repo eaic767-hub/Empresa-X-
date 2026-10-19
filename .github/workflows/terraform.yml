@@ -90,11 +90,14 @@ jobs:
           EKS_CLUSTER_NAME="empresa-x-cluster-emanuel-dev"
           aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" || true
           
-          echo "Eliminando servicios y deployments de Kubernetes para liberar el ELB y las ENIs..."
+          echo "Eliminando primero servicios tipo LoadBalancer para forzar la liberación del ELB en AWS..."
+          kubectl delete svc --all --all-namespaces --timeout=60s || true
+          
+          echo "Eliminando el resto de recursos de Kubernetes..."
           kubectl delete all --all --timeout=60s || true
           
-          echo "Esperando 30 segundos a que AWS libere los recursos de red..."
-          sleep 30
+          echo "Esperando 60 segundos a que AWS libere por completo las ENIs y el Internet Gateway..."
+          sleep 60
 
       - name: Terraform Destroy (Manual Triggered)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'destroy' }}
@@ -172,4 +175,4 @@ jobs:
       - name: Apply Kubernetes Manifests
         run: |
           echo "Aplicando manifiestos de Kubernetes..."
-          kubectl apply -f k8s/ 
+          kubectl apply -f k8s/
