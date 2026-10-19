@@ -83,6 +83,19 @@ jobs:
           cat apply_output.log
           if grep -q "Error:" apply_output.log; then exit 1; fi
 
+      - name: Pre-Destroy Cleanup (Kubernetes LoadBalancers & Resources)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'destroy' }}
+        run: |
+          echo "Conectando al clúster EKS para limpiar recursos de red previos al destroy..."
+          EKS_CLUSTER_NAME="empresa-x-cluster-emanuel-dev"
+          aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" || true
+          
+          echo "Eliminando servicios y deployments de Kubernetes para liberar el ELB y las ENIs..."
+          kubectl delete all --all --timeout=60s || true
+          
+          echo "Esperando 30 segundos a que AWS libere los recursos de red..."
+          sleep 30
+
       - name: Terraform Destroy (Manual Triggered)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'destroy' }}
         run: |
