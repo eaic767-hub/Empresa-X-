@@ -160,4 +160,3 @@ jobs:
         run: |
           echo "Aplicando manifiestos de Kubernetes..."
           kubectl apply -f k8s/ 
-#agrego comentario para destrabar el CI/CD 

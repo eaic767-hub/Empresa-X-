@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend-app
-        image: 891377317762.dkr.ecr.us-east-1.amazonaws.com/__ECR_REPOSITORY__:latest
+        image: 798474696671.dkr.ecr.us-east-1.amazonaws.com/empresa-x-backend-dev-emanuel:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
