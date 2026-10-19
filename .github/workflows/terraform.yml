@@ -61,7 +61,6 @@ jobs:
 
       - name: Terraform Init (Dynamic Sandbox State)
         run: |
-          # Si estamos en main usa el estado oficial, si estamos en otra rama usa tu sandbox personal
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             STATE_KEY="dev/terraform.tfstate"
           else
@@ -94,7 +93,6 @@ jobs:
     name: "Build & Push Docker Image"
     needs: terraform
     runs-on: ubuntu-latest
-    # Solo construimos la imagen si NO estamos ejecutando un destroy manual
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.terraform_action != 'destroy' }}
 
     defaults:
@@ -129,7 +127,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
   deploy-k8s:
-    name: "Deploy Manifeast to EKS"
+    name: "Deploy Manifest to EKS"
     needs: docker-build
     runs-on: ubuntu-latest
 
@@ -145,9 +143,20 @@ jobs:
           aws-region: us-east-1
 
       - name: Update Kubeconfig for EKS
+        env:
+          EKS_CLUSTER_NAME: ${{ github.ref == 'refs/heads/main' && 'empresa-x-cluster-dev' || 'empresa-x-cluster-emanuel-dev' }}
         run: |
-          aws eks update-kubeconfig --region us-east-1 --name empresa-x-cluster-emanuel-dev
+          echo "Conectando al clúster EKS: $EKS_CLUSTER_NAME"
+          aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME"
+
+      - name: Substitute ECR Repository in Manifest
+        env:
+          ECR_REPO: ${{ github.ref == 'refs/heads/main' && 'empresa-x-backend-dev' || 'empresa-x-backend-dev-emanuel' }}
+        run: |
+          echo "Inyectando repositorio ECR dinámico: $ECR_REPO"
+          sed -i "s|__ECR_REPOSITORY__|$ECR_REPO|g" k8s/app-deployment.yaml
+
       - name: Apply Kubernetes Manifests
         run: |
           echo "Aplicando manifiestos de Kubernetes..."
-          kubectl apply -f K8s/
+          kubectl apply -f k8s/
