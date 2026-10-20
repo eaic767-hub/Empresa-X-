@@ -26,25 +26,13 @@ import {
   id = "arn:aws:iam::798474696671:policy/ec2-backend-sdk-policy-dev"
 }
 
-# 5. DB Subnet Group de RDS (¡Importante para evitar el choque de VPC!)
-import {
-  to = module.rds_dev.aws_db_subnet_group.rds_subnet_group
-  id = "dev-rds-subnet-group"
-}
-
-# 6. Secret Manager Secret de RDS
+# 5. Secret Manager Secret de RDS
 import {
   to = module.rds_dev.aws_secretsmanager_secret.db_credentials
   id = "arn:aws:secretsmanager:us-east-1:798474696671:secret:dev-mysql-db-credentials-0EF3QD"
 }
 
-# 7. Target Group del ALB (¡Importante para evitar el AlreadyExists!)
-import {
-  to = module.alb.aws_lb_target_group.this
-  id = "arn:aws:elasticloadbalancing:us-east-1:798474696671:targetgroup/tg-dev-backend-v2/c4346ccf4a4421f1"
-}
-
-# 8. Instance Profile de EC2
+# 6. Instance Profile de EC2
 import {
   to = module.ec2.aws_iam_instance_profile.backend_profile
   id = "ec2-backend-profile-dev"
