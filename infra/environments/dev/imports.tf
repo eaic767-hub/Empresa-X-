@@ -34,12 +34,6 @@ import {
   id = "arn:aws:secretsmanager:us-east-1:798474696671:secret:dev-mysql-db-credentials-0EF3QD"
 }
 
-# 7. Target Group del ALB
-import {
-  to = module.alb.aws_lb_target_group.this
-  id = "arn:aws:elasticloadbalancing:us-east-1:798474696671:targetgroup/tg-dev-backend-v2/c4346ccf4a4421f1"
-}
-
 # 8. Target Group del ALB (faltaba en el import anterior)
 import {
   to = module.alb.aws_lb_target_group.this
