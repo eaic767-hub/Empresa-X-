@@ -140,6 +140,9 @@ jobs:
               sleep 15
             }
           done
+          
+          # Verificamos que el contexto esté apuntando a EKS y no a localhost
+          kubectl cluster-info
 
       - name: Apply Kubernetes Manifests
         run: |
