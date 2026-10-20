@@ -46,8 +46,3 @@ import {
   id = "ec2-backend-profile-dev"
 }
 
-# 10. OIDC Provider de EKS
-import {
-  to = module.EKS.data.aws_iam_openid_connect_provider.eks
-  id = "arn:aws:iam::798474696671:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/32E259A602574A4CEBFB076BD3F0DE4B"
-}
