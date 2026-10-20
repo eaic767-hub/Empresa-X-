@@ -94,6 +94,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image to Amazon ECR
+        working-directory: ./app
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: empresa-x-repo
@@ -101,7 +102,7 @@ jobs:
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
+          
   deploy-k8s:
     name: Deploy to Kubernetes
     needs: [terraform, docker-build]
@@ -131,6 +132,8 @@ jobs:
           done
 
       - name: Apply Kubernetes Manifests
+        # working-directory añadido por si tus manifiectos YAML están en una subcarpeta (cámbiala si los tienes en la raíz o en otra ruta)
+        # Si tus archivos k8s/ están en la raíz del proyecto, puedes quitar la línea de working-directory de abajo o ajustarla.
         run: |
           kubectl apply -f k8s/storage-class.yaml
           kubectl apply -f k8s/statefulset.yaml
