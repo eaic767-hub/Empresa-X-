@@ -92,6 +92,8 @@ resource "aws_eks_node_group" "main" {
 #1. Obtener el proveedor OIDC del CLuster EKS para autenticación segura (IRSA)
 data "aws_iam_openid_connect_provider" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+
+  depends_on = [aws_eks_cluster.main]
 }
 
 #2. Rol IAM para el EBS CSI Driver Controler (licencias para crear y destruir EBS CSI Driver)
