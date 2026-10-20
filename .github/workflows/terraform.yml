@@ -2,8 +2,6 @@ name: Terraform Deploy & Destroy
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       action:
@@ -43,29 +41,33 @@ jobs:
         run: terraform init
         working-directory: ./infra
 
-      # Pre-Destroy Cleanup: Fuerza la eliminación de servicios LoadBalancer y ENIs colgados antes de destruir la VPC
+      # Pre-Destroy Cleanup: Fuerza la eliminación de servicios LoadBalancer y ENIs colgados antes de destruir
       - name: Pre-Destroy Cleanup (ELB & ENI Release)
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
           echo "Iniciando limpieza previa de recursos huérfanos de Kubernetes..."
           CLUSTER_NAME="${{ github.ref == 'refs/heads/main' && 'empresa-x-cluster-dev' || 'empresa-x-cluster-emanuel-dev' }}"
           
-          # Intentar configurar el kubeconfig si el clúster existe
           aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
-          
-          # Borrar todos los servicios tipo LoadBalancer para liberar los ELBs y ENIs automáticamente
           kubectl delete svc --all --all-namespaces --timeout=30s || true
           
           echo "Esperando 60 segundos para que AWS libere las ENIs y los Balanceadores de Carga..."
           sleep 60
 
       - name: Terraform Apply or Destroy
+        working-directory: ./infra
         run: |
           ACTION="${{ github.event.inputs.action }}"
           if [ -z "$ACTION" ]; then
             ACTION="apply"
           fi
           
+          # Verificar que los archivos .tf existan en el directorio actual
+          if [ ! -f "main.tf" ] && [ ! -f "providers.tf" ]; then
+            echo "Error: Archivos de configuración de Terraform no encontrados en ./infra"
+            exit 1
+          fi
+
           if [ "$ACTION" = "destroy" ]; then
             echo "Ejecutando Terraform Destroy..."
             terraform destroy -auto-approve
@@ -73,7 +75,6 @@ jobs:
             echo "Ejecutando Terraform Apply..."
             terraform apply -auto-approve
           fi
-        working-directory: ./infra
 
   docker-build:
     name: Build & Push Docker Image
