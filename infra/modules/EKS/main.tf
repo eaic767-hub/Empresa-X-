@@ -74,8 +74,8 @@ resource "aws_eks_node_group" "main" {
   subnet_ids      = var.subnet_ids
 
   scaling_config {
-    desired_size = 2
-    max_size     = 3
+    desired_size = 3
+    max_size     = 4
     min_size     = 1
   }
 
@@ -85,5 +85,52 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.nodes_amazon_eks_worker_node_policy,
     aws_iam_role_policy_attachment.nodes_amazon_eks_cni_policy,
     aws_iam_role_policy_attachment.nodes_amazon_ec2_container_registry_read_only,
+  ]
+}
+
+#-- CONFIGURACIÓN DE EBS CSI DRIVER (ALMACENAMIENTO PERSISTENTE PARA PODS) ---
+#1. Obtener el proveedor OIDC del CLuster EKS para autenticación segura (IRSA)
+data "aws_iam_openid_connect_provider" "eks" {
+  url = aws_eks_cluster.main.identity[0].openid[0].issuer
+}
+
+#2. Rol IAM para el EBS CSI Driver Controler (licencias para crear y destruir EBS CSI Driver)
+resource "aws_iam_role" "ebs_csi_controller" {
+  name = var.resource_prefix != "" ? "empresa-x-eks-ebs-csi-role-${var.resource_prefix}-${var.environment}" : "empresa-x-eks-ebs-csi-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Effect = "Allow"
+      Principal = {
+        Federated = data.aws_iam_openid_connect_provider.eks.arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+          "${replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
+#3. Adjuntar la política oficial de AWS para el manejo de EBS
+resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi_controller.name
+}
+
+#4. Add-on de EKS para instalar el EBS CSI Driver
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "aws-ebs-csi-driver"
+  service_account_role_arn    = aws_iam_role.ebs_csi_controller.arn
+  resolve_conflicts_on_create = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.ebs_csi_policy
   ]
 }

@@ -1,12 +1,13 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: hola-mundo-deployment
   namespace: default
   labels:
     app: hola-mundo
 spec:
-  replicas: 2
+  serviceName: "hola-mundo-service"
+  replicas: 2  
   selector:
     matchLabels:
       app: hola-mundo
@@ -16,7 +17,7 @@ spec:
         app: hola-mundo
     spec:
       containers:
-      - name: backend-app
+      - name: backend-app  # Tu nombre de contenedor exacto
         image: 798474696671.dkr.ecr.us-east-1.amazonaws.com/empresa-x-backend-dev-emanuel:latest
         imagePullPolicy: Always
         ports:
@@ -28,3 +29,17 @@ spec:
           requests:
             cpu: "100m"
             memory: "128Mi"
+        # Montaje del volumen persistente de EBS
+        volumeMounts:
+        - name: app-storage
+          mountPath: /app/data
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: app-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "ebs-gp3-sc"  # Usa la StorageClass que creamos
+      resources:
+        requests:
+          storage: 10Gi
