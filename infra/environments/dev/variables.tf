@@ -1,24 +1,29 @@
 variable "aws_region" {
   type        = string
   description = "Region de AWS para el despliegue"
+  default     = "us-east-1"
 }
 
 variable "environment" {
   type        = string
   description = "Entorno de Trabajo"
+  default     = "dev"
 }
 
 variable "instance_type" {
-  type = string
+  type    = string
+  default = "t3.small"
 }
 
 variable "public_key_path" {
-  type = string
+  type    = string
+  default = "nginx-server.key.pub"
 }
 
 variable "root_volume_size" {
   description = "tamaño de disco de la instancia en Gb"
   type        = number
+  default     = 8
 }
 
 variable "db_name" {
