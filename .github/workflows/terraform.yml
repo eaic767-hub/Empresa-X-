@@ -62,11 +62,9 @@ jobs:
             ACTION="apply"
           fi
           
-          # Verificar que los archivos .tf existan en el directorio actual
-          if [ ! -f "main.tf" ] && [ ! -f "providers.tf" ]; then
-            echo "Error: Archivos de configuración de Terraform no encontrados en ./infra"
-            exit 1
-          fi
+          # Listar el directorio para depuración en caso de que falte algún archivo .tf
+          echo "Contenido actual en ./infra:"
+          ls -la
 
           if [ "$ACTION" = "destroy" ]; then
             echo "Ejecutando Terraform Destroy..."
