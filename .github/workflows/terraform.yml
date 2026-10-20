@@ -44,16 +44,28 @@ jobs:
         run: terraform init
         working-directory: ./infra/environments/dev
 
-      # Pre-Destroy Cleanup: Fuerza la eliminación de servicios LoadBalancer y ENIs colgados antes de destruir
-      - name: Pre-Destroy Cleanup (ELB & ENI Release)
+      # --- PASO BLINDADO DE PRE-DESTRUCTION ---
+      - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
-          echo "Iniciando limpieza previa de recursos huérfanos de Kubernetes..."
-          # Este paso ya no fallará porque ahora leemos el output directo de terraform si es necesario, 
-          # o usamos un comando seguro.
-          kubectl delete svc --all --all-namespaces --timeout=30s || true
-          echo "Esperando 60 segundos para que AWS libere las ENIs y los Balanceadores de Carga..."
-          sleep 60
+          echo "Intentando conectar al clúster antes de destruirlo para limpiar LoadBalancers y evitar bloqueos de red..."
+          
+          # Extraemos el nombre del clúster directo de Terraform de forma segura
+          cd ./infra/environments/dev
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          
+          if [ -n "$CLUSTER_NAME" ]; then
+            echo "Clúster detectado: $CLUSTER_NAME. Actualizando kubeconfig..."
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
+            
+            echo "Eliminando servicios LoadBalancer para liberar ENIs en AWS..."
+            kubectl delete svc --all --all-namespaces --timeout=30s || true
+            
+            echo "Esperando 60 segundos obligatorios para que AWS libere por completo las ENIs y los balanceadores..."
+            sleep 60
+          else
+            echo "No se encontró un clúster activo o ya fue destruido. Saltando limpieza de K8s."
+          fi
 
       - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
@@ -74,6 +86,7 @@ jobs:
       - name: Extract ECR Repository Name
         id: extract-ecr
         working-directory: ./infra/environments/dev
+        if: github.event.inputs.action != 'destroy'
         run: |
           REPO_NAME=$(terraform output -raw ecr_repository_name)
           echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
@@ -82,6 +95,7 @@ jobs:
       - name: Extract EKS Cluster Name
         id: extract-eks
         working-directory: ./infra/environments/dev
+        if: github.event.inputs.action != 'destroy'
         run: |
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
