@@ -1,3 +1,7 @@
+# ==========================================
+# IMPORTACIONES DE RECURSOS MANUALES A TERRAFORM
+# ==========================================
+
 # 1. Rol de Scheduler
 import {
   to = aws_iam_role.scheduler_role
@@ -34,15 +38,14 @@ import {
   id = "arn:aws:secretsmanager:us-east-1:798474696671:secret:dev-mysql-db-credentials-0EF3QD"
 }
 
-# 8. Target Group del ALB (faltaba en el import anterior)
+# 7. Target Group del ALB
 import {
   to = module.alb.aws_lb_target_group.this
   id = "arn:aws:elasticloadbalancing:us-east-1:798474696671:targetgroup/tg-dev-backend-v2/c4346ccf4a4421f1"
 }
 
-# 9. Instance Profile de EC2
+# 8. Instance Profile de EC2
 import {
   to = module.ec2.aws_iam_instance_profile.backend_profile
   id = "ec2-backend-profile-dev"
 }
-
