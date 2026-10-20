@@ -21,6 +21,8 @@ jobs:
   terraform:
     name: Terraform Provisioning
     runs-on: ubuntu-latest
+    outputs:
+      ecr_repo: ${{ steps.extract-ecr.outputs.repo_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -73,6 +75,14 @@ jobs:
             terraform apply -auto-approve
           fi
 
+      - name: Extract ECR Repository Name
+        id: extract-ecr
+        working-directory: ./infra/environments/dev
+        run: |
+          REPO_NAME=$(terraform output -raw ecr_repository_name)
+          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+          echo "Repositorio ECR detectado con éxito: $REPO_NAME"
+
   docker-build:
     name: Build & Push Docker Image
     needs: terraform
@@ -97,7 +107,7 @@ jobs:
         working-directory: ./app
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: empresa-x-repo
+          REPOSITORY: ${{ needs.terraform.outputs.ecr_repo }}
           IMAGE_TAG: latest
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
@@ -132,8 +142,6 @@ jobs:
           done
 
       - name: Apply Kubernetes Manifests
-        # working-directory añadido por si tus manifiectos YAML están en una subcarpeta (cámbiala si los tienes en la raíz o en otra ruta)
-        # Si tus archivos k8s/ están en la raíz del proyecto, puedes quitar la línea de working-directory de abajo o ajustarla.
         run: |
           kubectl apply -f k8s/storage-class.yaml
           kubectl apply -f k8s/statefulset.yaml
