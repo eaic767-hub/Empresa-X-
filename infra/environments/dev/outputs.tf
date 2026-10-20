@@ -48,7 +48,7 @@ output "prometheus_dashboard_url" {
   value       = module.monitoring.prometheus_url
 }
 
-output "repository_name" {
-  description = "Nombre del repositorio ECR"
-  value       = aws_ecr_repository.this.name
+output "ecr_repository_name" {
+  description = "Nombre exacto del repositorio ECR extraído de su URL"
+  value       = split("/", module.ecr.repository_url)[1]
 }
