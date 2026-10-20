@@ -26,7 +26,7 @@ import {
   id = "arn:aws:iam::798474696671:policy/ec2-backend-sdk-policy-dev"
 }
 
-# 5. DB Subnet Group de RDS
+# 5. DB Subnet Group de RDS (¡Importante para evitar el choque de VPC!)
 import {
   to = module.rds_dev.aws_db_subnet_group.rds_subnet_group
   id = "dev-rds-subnet-group"
@@ -38,7 +38,7 @@ import {
   id = "arn:aws:secretsmanager:us-east-1:798474696671:secret:dev-mysql-db-credentials-0EF3QD"
 }
 
-# 7. Target Group del ALB
+# 7. Target Group del ALB (¡Importante para evitar el AlreadyExists!)
 import {
   to = module.alb.aws_lb_target_group.this
   id = "arn:aws:elasticloadbalancing:us-east-1:798474696671:targetgroup/tg-dev-backend-v2/c4346ccf4a4421f1"
