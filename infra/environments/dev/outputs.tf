@@ -55,5 +55,5 @@ output "ecr_repository_name" {
 
 output "eks_cluster_name" {
   description = "Nombre real del clúster EKS desplegado"
-  value       = module.eks.cluster_name
+  value       = module.EKS.cluster_name
 }
