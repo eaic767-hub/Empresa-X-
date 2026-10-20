@@ -91,7 +91,7 @@ resource "aws_eks_node_group" "main" {
 #-- CONFIGURACIÓN DE EBS CSI DRIVER (ALMACENAMIENTO PERSISTENTE PARA PODS) ---
 #1. Obtener el proveedor OIDC del CLuster EKS para autenticación segura (IRSA)
 data "aws_iam_openid_connect_provider" "eks" {
-  url = aws_eks_cluster.main.identity[0].openid[0].issuer
+  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
 #2. Rol IAM para el EBS CSI Driver Controler (licencias para crear y destruir EBS CSI Driver)
