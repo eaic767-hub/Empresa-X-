@@ -52,3 +52,8 @@ output "ecr_repository_name" {
   description = "Nombre exacto del repositorio ECR extraído de su URL"
   value       = split("/", module.ecr.repository_url)[1]
 }
+
+output "eks_cluster_name" {
+  description = "Nombre real del clúster EKS desplegado"
+  value       = module.eks.cluster_name
+}

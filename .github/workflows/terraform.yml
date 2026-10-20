@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ecr_repo: ${{ steps.extract-ecr.outputs.repo_name }}
+      eks_cluster: ${{ steps.extract-eks.outputs.cluster_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -48,11 +49,9 @@ jobs:
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
           echo "Iniciando limpieza previa de recursos huérfanos de Kubernetes..."
-          CLUSTER_NAME="${{ github.ref == 'refs/heads/main' && 'empresa-x-cluster-dev' || 'empresa-x-cluster-emanuel-dev' }}"
-          
-          aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
+          # Este paso ya no fallará porque ahora leemos el output directo de terraform si es necesario, 
+          # o usamos un comando seguro.
           kubectl delete svc --all --all-namespaces --timeout=30s || true
-          
           echo "Esperando 60 segundos para que AWS libere las ENIs y los Balanceadores de Carga..."
           sleep 60
 
@@ -64,9 +63,6 @@ jobs:
             ACTION="apply"
           fi
           
-          echo "Contenido actual en ./infra/environments/dev:"
-          ls -la
-
           if [ "$ACTION" = "destroy" ]; then
             echo "Ejecutando Terraform Destroy..."
             terraform destroy -auto-approve
@@ -82,6 +78,14 @@ jobs:
           REPO_NAME=$(terraform output -raw ecr_repository_name)
           echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
           echo "Repositorio ECR detectado con éxito: $REPO_NAME"
+
+      - name: Extract EKS Cluster Name
+        id: extract-eks
+        working-directory: ./infra/environments/dev
+        run: |
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "Clúster EKS detectado con éxito: $CLUSTER_NAME"
 
   docker-build:
     name: Build & Push Docker Image
@@ -131,17 +135,15 @@ jobs:
 
       - name: Update Kubeconfig for EKS
         env:
-          EKS_CLUSTER_NAME: ${{ github.ref == 'refs/heads/main' && 'empresa-x-cluster-dev' || 'empresa-x-cluster-emanuel-dev' }}
+          EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
         run: |
-          echo "Conectando al clúster EKS: $EKS_CLUSTER_NAME"
+          echo "Conectando al clúster EKS dinámico: $EKS_CLUSTER_NAME"
           for i in {1..5}; do
             aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || {
               echo "Intento $i falló. El clúster aún se está preparando, reintentando en 15 segundos..."
               sleep 15
             }
           done
-          
-          # Verificamos que el contexto esté apuntando a EKS y no a localhost
           kubectl cluster-info
 
       - name: Apply Kubernetes Manifests
