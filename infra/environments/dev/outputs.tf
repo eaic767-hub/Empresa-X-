@@ -47,3 +47,8 @@ output "prometheus_dashboard_url" {
   description = "Acceso directo a la consola de Prometheus"
   value       = module.monitoring.prometheus_url
 }
+
+output "repository_name" {
+  description = "Nombre del repositorio ECR"
+  value       = aws_ecr_repository.this.name
+}
