@@ -47,8 +47,3 @@ output "prometheus_dashboard_url" {
   description = "Acceso directo a la consola de Prometheus"
   value       = module.monitoring.prometheus_url
 }
-
-output "ecr_repository_name" {
-  description = "Nombre exacto del repositorio ECR creado por Terraform"
-  value       = module.ecr.repository_name # (Asegúrate de que 'ecr' sea el nombre de tu módulo en el main.tf)
-}
