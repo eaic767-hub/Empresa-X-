@@ -39,7 +39,7 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
-        working-directory: ./infra
+        working-directory: ./infra/environments/dev
 
       # Pre-Destroy Cleanup: Fuerza la eliminación de servicios LoadBalancer y ENIs colgados antes de destruir
       - name: Pre-Destroy Cleanup (ELB & ENI Release)
@@ -55,15 +55,14 @@ jobs:
           sleep 60
 
       - name: Terraform Apply or Destroy
-        working-directory: ./infra
+        working-directory: ./infra/environments/dev
         run: |
           ACTION="${{ github.event.inputs.action }}"
           if [ -z "$ACTION" ]; then
             ACTION="apply"
           fi
           
-          # Listar el directorio para depuración en caso de que falte algún archivo .tf
-          echo "Contenido actual en ./infra:"
+          echo "Contenido actual en ./infra/environments/dev:"
           ls -la
 
           if [ "$ACTION" = "destroy" ]; then
