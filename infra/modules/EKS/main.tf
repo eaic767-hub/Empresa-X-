@@ -79,7 +79,7 @@ resource "aws_eks_node_group" "main" {
     min_size     = 1
   }
 
-  instance_types = [var.instance_type] # Usará t3.micro según tus variables
+  instance_types = [var.instance_type]
 
   depends_on = [
     aws_iam_role_policy_attachment.nodes_amazon_eks_worker_node_policy,
@@ -88,15 +88,24 @@ resource "aws_eks_node_group" "main" {
   ]
 }
 
-#-- CONFIGURACIÓN DE EBS CSI DRIVER (ALMACENAMIENTO PERSISTENTE PARA PODS) ---
-#1. Obtener el proveedor OIDC del CLuster EKS para autenticación segura (IRSA)
-data "aws_iam_openid_connect_provider" "eks" {
+#-- CONFIGURACIÓN DE EBS CSI DRIVER Y OIDC ---
+#1. Certificado TLS para extraer el thumbprint del OIDC de EKS
+data "tls_certificate" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
   depends_on = [aws_eks_cluster.main]
 }
 
-#2. Rol IAM para el EBS CSI Driver Controler (licencias para crear y destruir EBS CSI Driver)
+#2. Proveedor OIDC como Recurso Administrado (Soluciona el error 'couldn't find resource')
+resource "aws_iam_openid_connect_provider" "eks" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
+
+  depends_on = [aws_eks_cluster.main]
+}
+
+#3. Rol IAM para el EBS CSI Driver Controller (IRSA)
 resource "aws_iam_role" "ebs_csi_controller" {
   name = var.resource_prefix != "" ? "empresa-x-eks-ebs-csi-role-${var.resource_prefix}-${var.environment}" : "empresa-x-eks-ebs-csi-role-${var.environment}"
 
@@ -106,25 +115,25 @@ resource "aws_iam_role" "ebs_csi_controller" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Federated = data.aws_iam_openid_connect_provider.eks.arn
+        Federated = aws_iam_openid_connect_provider.eks.arn
       }
       Condition = {
         StringEquals = {
-          "${replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
-          "${replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
         }
       }
     }]
   })
 }
 
-#3. Adjuntar la política oficial de AWS para el manejo de EBS
+#4. Adjuntar la política oficial de AWS para el manejo de EBS
 resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   role       = aws_iam_role.ebs_csi_controller.name
 }
 
-#4. Add-on de EKS para instalar el EBS CSI Driver
+#5. Add-on de EKS para instalar el EBS CSI Driver
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "aws-ebs-csi-driver"
