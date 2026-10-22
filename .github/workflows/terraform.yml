@@ -82,15 +82,25 @@ jobs:
             terraform apply -auto-approve
           fi
 
-      # --- ACTUALIZAR KUBECONFIG POST-APPLY PARA QUE EL PROVEEDOR DE K8S Y KUBECTL TENGAN EL CONTEXTO ---
-      - name: Update Kubeconfig for Kubernetes Provider & Tools
+      # --- ACTUALIZAR KUBECONFIG Y CREAR SERVICEACCOUNT CON KUBECTL ---
+      - name: Configure Kubeconfig & Deploy LBC ServiceAccount
         if: github.event.inputs.action != 'destroy'
         working-directory: ./infra/environments/dev
         run: |
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_irsa_iam_role_arn || echo "")
+          
           if [ -n "$CLUSTER_NAME" ]; then
-            echo "Actualizando kubeconfig para el clúster recién creado/actualizado: $CLUSTER_NAME"
+            echo "Actualizando kubeconfig para el clúster: $CLUSTER_NAME"
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
+          fi
+          
+          if [ -n "$ROLE_ARN" ]; then
+            echo "Configurando la ServiceAccount de Kubernetes con el rol IRSA: $ROLE_ARN"
+            kubectl create serviceaccount aws-load-balancer-controller -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+            kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn="$ROLE_ARN" --overwrite
+          else
+            echo "Aviso: No se pudo obtener el ARN del rol IRSA desde Terraform outputs."
           fi
 
       - name: Extract ECR Repository Name

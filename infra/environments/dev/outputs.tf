@@ -57,3 +57,8 @@ output "eks_cluster_name" {
   description = "Nombre real del clúster EKS desplegado"
   value       = module.EKS.cluster_name
 }
+
+output "aws_load_balancer_controller_irsa_iam_role_arn" {
+  value       = module.aws_load_balancer_controller_irsa.iam_role_arn
+  description = "ARN del rol IAM para el Load Balancer Controller"
+}
