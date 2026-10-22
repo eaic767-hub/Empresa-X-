@@ -118,7 +118,7 @@ module "aws_load_balancer_controller_irsa" {
 }
 
 # ServiceAccount creada nativamente por Terraform en Kubernetes
-resource "kubernetes_service_account" "aws_load_balancer_controller" {
+resource "kubernetes_service_account_v1" "aws_load_balancer_controller" {
   metadata {
     name      = "aws-load-balancer-controller"
     namespace = "kube-system"

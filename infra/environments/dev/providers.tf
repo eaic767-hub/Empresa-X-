@@ -16,14 +16,16 @@ terraform {
   }
 }
 
-# Proveedor de Kubernetes configurado de forma segura para evitar errores al crearse el clúster
+# Proveedor de Kubernetes configurado de forma robusta para clústeres dinámicos
 provider "kubernetes" {
-  host     = try(module.EKS.cluster_endpoint, "")
+  # Si el clúster aún no existe (primer apply), usa un endpoint temporal válido para pasar la validación.
+  # Una vez creado, usa inmediatamente el endpoint real del módulo EKS.
+  host     = try(module.EKS.cluster_endpoint, "https://localhost")
   insecure = true
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", try(module.EKS.cluster_name, "dummy")]
+    args        = ["eks", "get-token", "--cluster-name", try(module.EKS.cluster_name, "placeholder-cluster")]
     command     = "aws"
   }
 }
