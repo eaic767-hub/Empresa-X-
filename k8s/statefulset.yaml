@@ -20,6 +20,8 @@ spec:
       - name: backend-app  # Tu nombre de contenedor exacto
         image: 798474696671.dkr.ecr.us-east-1.amazonaws.com/empresa-x-backend-dev-emanuel:latest
         imagePullPolicy: Always
+        command: ["sh", "-c"]
+        args: ["php -S 0.0.0.0:8080 -t /var/www/html"]
         ports:
         - containerPort: 8080
         resources:

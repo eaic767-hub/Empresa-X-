@@ -48,7 +48,7 @@ jobs:
       - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
-          echo "Intentando conectar al clúster antes de destruirlo para limpiar LoadBalancers y evitar bloqueos de red..."
+          echo "Conectando al clúster antes de destruirlo para barrer Ingress, LoadBalancers y liberar dependencias de AWS..."
           
           cd ./infra/environments/dev
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
@@ -57,11 +57,17 @@ jobs:
             echo "Clúster detectado: $CLUSTER_NAME. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
-            echo "Eliminando servicios LoadBalancer para liberar ENIs en AWS..."
+            echo "1. Borrando objetos Ingress para forzar a AWS a eliminar los ALBs asociados..."
+            kubectl delete ingress --all --all-namespaces --timeout=60s || true
+            
+            echo "2. Eliminando todos los servicios Kubernetes..."
             kubectl delete svc --all --all-namespaces --timeout=30s || true
             
-            echo "Esperando 60 segundos obligatorios para que AWS libere por completo las ENIs y los balanceadores..."
-            sleep 60
+            echo "3. Desinstalando el AWS Load Balancer Controller vía Helm para apagar el controlador..."
+            helm uninstall aws-load-balancer-controller -n kube-system || true
+            
+            echo "4. Esperando 90 segundos obligatorios para que AWS destruya físicamente los ALBs y libere las ENIs..."
+            sleep 90
           else
             echo "No se encontró un clúster activo o ya fue destruido. Saltando limpieza de K8s."
           fi

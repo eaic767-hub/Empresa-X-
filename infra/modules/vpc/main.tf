@@ -12,6 +12,10 @@ resource "aws_vpc" "main_vpc" {
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main_vpc.id
 
+  timeouts {
+    delete = "20m" # Dale margen para que suelte las dependencias sin crashear
+  }
+
   tags = {
     Name        = "igw-${var.environment}"
     Environment = var.environment
