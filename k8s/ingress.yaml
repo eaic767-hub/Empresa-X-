@@ -6,14 +6,14 @@ metadata:
   annotations:
     # Le indicamos a K8S que use el controlador de AWS para este Ingress
     alb.ingress.kubernetes.io/scheme: "internet-facing"
-    # Se definen los puertos que escuchará el ALB de AWS
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    # Regla Opcional para redirigir HTTP A HTTPS
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
-    # Tipo de destino para los pods (En EKS moderno se usa ip)
+    # Escuchamos únicamente en el puerto 80 por ahora
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    # Tipo de destino para los pods (en EKS moderno se usa ip)
     alb.ingress.kubernetes.io/target-type: "ip"
+    # ¡Esta anotación le avisa al ALB que use tu health.php para las pruebas de salud!
+    alb.ingress.kubernetes.io/healthcheck-path: "/health.php"
 spec:
-  ingressClassName: "alb" # Reemplaza la anotación vieja de clase
+  ingressClassName: "alb"
   rules:
     - http:
         paths:
@@ -21,6 +21,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: hola-mundo-service # mismo nombre del service.yaml
+                name: hola-mundo-service
                 port:
-                  number: 8080 # Puerto de escucha del backend
+                  number: 8080

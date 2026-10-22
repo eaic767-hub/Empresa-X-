@@ -26,5 +26,5 @@ EXPOSE 8000
 # Healthcheck
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD curl -f http://localhost:8000/health.php || exit 1
 
-# Servidor de desarrollo integrado escuchando en el puerto 8000
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "/var/www/html"]
+# Servidor de desarrollo integrado escuchando en el puerto 8080
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "/var/www/html"]

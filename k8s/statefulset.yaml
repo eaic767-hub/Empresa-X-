@@ -21,7 +21,7 @@ spec:
         image: 798474696671.dkr.ecr.us-east-1.amazonaws.com/empresa-x-backend-dev-emanuel:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         resources:
           limits:
             cpu: "500m"
