@@ -82,14 +82,14 @@ jobs:
             terraform apply -auto-approve
           fi
 
-      # --- ACTUALIZAR KUBECONFIG POST-APPLY PARA EL PROVEEDOR DE K8S ---
-      - name: Update Kubeconfig for Terraform Kubernetes Provider
+      # --- ACTUALIZAR KUBECONFIG POST-APPLY PARA QUE EL PROVEEDOR DE K8S Y KUBECTL TENGAN EL CONTEXTO ---
+      - name: Update Kubeconfig for Kubernetes Provider & Tools
         if: github.event.inputs.action != 'destroy'
         working-directory: ./infra/environments/dev
         run: |
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
           if [ -n "$CLUSTER_NAME" ]; then
-            echo "Actualizando kubeconfig para que el proveedor de K8s en Terraform hable con el clúster..."
+            echo "Actualizando kubeconfig para el clúster recién creado/actualizado: $CLUSTER_NAME"
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
           fi
 

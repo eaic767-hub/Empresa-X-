@@ -16,7 +16,7 @@ terraform {
   }
 }
 
-# Proveedor de Kubernetes configurado de forma directa
+# Proveedor de Kubernetes para que Terraform pueda crear recursos dentro de EKS
 provider "kubernetes" {
   host     = module.EKS.cluster_endpoint
   insecure = true
