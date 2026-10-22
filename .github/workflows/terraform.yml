@@ -103,6 +103,27 @@ jobs:
             echo "Aviso: No se pudo obtener el ARN del rol IRSA desde Terraform outputs."
           fi
 
+      # --- INSTALAR EL AWS LOAD BALANCER CONTROLLER VÍA HELM ---
+      - name: Install AWS Load Balancer Controller via Helm
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          echo "Agregando repositorio de Helm para EKS..."
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          VPC_ID=$(terraform output -raw vpc_id || echo "")
+
+          echo "Instalando o actualizando el AWS Load Balancer Controller en el clúster..."
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName="$CLUSTER_NAME" \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set region=us-east-1 \
+            --set vpcId="$VPC_ID"
+
       - name: Extract ECR Repository Name
         id: extract-ecr
         working-directory: ./infra/environments/dev
