@@ -100,3 +100,39 @@ module "EKS" {
   resource_prefix = var.resource_prefix # <--- Pasamos el prefijo
   subnet_ids      = module.vpc_dev.public_subnet_ids
 }
+
+# Módulo IRSA para el AWS Load Balancer Controller
+module "aws_load_balancer_controller_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name                              = "aws-load-balancer-controller-${module.EKS.cluster_name}"
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    ex = {
+      provider_arn               = module.EKS.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+}
+
+# ServiceAccount creada nativamente por Terraform en Kubernetes
+resource "kubernetes_service_account" "aws_load_balancer_controller" {
+  metadata {
+    name      = "aws-load-balancer-controller"
+    namespace = "kube-system"
+    labels = {
+      "app.kubernetes.io/component" = "controller"
+      "app.kubernetes.io/name"      = "aws-load-balancer-controller"
+    }
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.aws_load_balancer_controller_irsa.iam_role_arn
+    }
+  }
+
+  depends_on = [
+    module.EKS,
+    module.aws_load_balancer_controller_irsa
+  ]
+}

@@ -50,7 +50,6 @@ jobs:
         run: |
           echo "Intentando conectar al clúster antes de destruirlo para limpiar LoadBalancers y evitar bloqueos de red..."
           
-          # Extraemos el nombre del clúster directo de Terraform de forma segura
           cd ./infra/environments/dev
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
           
@@ -81,6 +80,17 @@ jobs:
           else
             echo "Ejecutando Terraform Apply..."
             terraform apply -auto-approve
+          fi
+
+      # --- ACTUALIZAR KUBECONFIG POST-APPLY PARA EL PROVEEDOR DE K8S ---
+      - name: Update Kubeconfig for Terraform Kubernetes Provider
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          if [ -n "$CLUSTER_NAME" ]; then
+            echo "Actualizando kubeconfig para que el proveedor de K8s en Terraform hable con el clúster..."
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
           fi
 
       - name: Extract ECR Repository Name
@@ -165,3 +175,4 @@ jobs:
           kubectl apply -f k8s/storage-class.yaml
           kubectl apply -f k8s/statefulset.yaml
           kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml

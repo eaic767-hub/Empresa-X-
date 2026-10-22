@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: empresa-x-ingress
+  namespace: default
+  annotations:
+  #le Indico a K8S que use el controlador de AWS para este Ingress
+  kubernetes.io/ingress.class: "alb"
+  # Se configura el ALB como internet-facing (publico) o internal
+  alb.ingress.kubernetes.io/scheme: "internet-facing"
+  # Se define los puertos que escuchara el ALB de AWS
+  alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+  # Regla Opcional para redirigir HTTP A HTTPS
+  alb.ingress.kubernetes.io/ssl-redirect: '443'
+  #tipo de destino para los pods (En eks moderno se usa ip o instance)
+  alb.ingress.kubernetes.io/target-type: "ip"
+spec:
+  rules:
+  # - host: tudominio.com (en caso de que exista), en este caso se dejo vacio para que reciba trafico http/https sin importar que url escriba el usuario en el navegador
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: empresa-x-backend-service ## El Service interno de tu K8s que apunta al StatefulSet
+              port:
+                number: 8080 #Puerto de escucha del backend
