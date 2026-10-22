@@ -16,14 +16,14 @@ terraform {
   }
 }
 
-# Proveedor de Kubernetes para que Terraform pueda crear recursos dentro de EKS
+# Proveedor de Kubernetes configurado de forma segura para evitar errores al crearse el clúster
 provider "kubernetes" {
-  host     = module.EKS.cluster_endpoint
+  host     = try(module.EKS.cluster_endpoint, "")
   insecure = true
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", module.EKS.cluster_name]
+    args        = ["eks", "get-token", "--cluster-name", try(module.EKS.cluster_name, "dummy")]
     command     = "aws"
   }
 }
