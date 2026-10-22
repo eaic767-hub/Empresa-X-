@@ -92,7 +92,7 @@ module "monitoring" {
   ami_id                = module.ec2.ami_id
   instance_profile_name = module.ec2.instance_profile_name
 }
-
+#-------------------------------------------------K8S-----------------------------------------------------------------
 # Modulo DE K8S EKS
 module "EKS" {
   source          = "../../modules/EKS"

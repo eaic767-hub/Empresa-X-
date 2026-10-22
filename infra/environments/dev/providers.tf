@@ -16,18 +16,14 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-}
-
-# Proveedor de Kubernetes para que Terraform pueda crear recursos dentro de EKS
+# Proveedor de Kubernetes configurado de forma directa
 provider "kubernetes" {
-  host                   = aws_eks_cluster.main.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
+  host     = module.EKS.cluster_endpoint
+  insecure = true
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.main.name]
+    args        = ["eks", "get-token", "--cluster-name", module.EKS.cluster_name]
     command     = "aws"
   }
 }
