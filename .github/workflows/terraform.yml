@@ -40,15 +40,23 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Terraform Init (Sandbox por Rama)
         working-directory: ./infra/environments/dev
+        run: |
+          # Detectar la rama actual de GitHub Actions y limpiar caracteres especiales para S3
+          BRANCH_NAME="${GITHUB_REF_NAME}"
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
+          
+          echo "Configurando Terraform Init para aislar el sandbox en la rama: $SAFE_BRANCH_NAME"
+          
+          terraform init \
+            -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate"
 
-      # --- PASO BLINDADO DE PRE-DESTRUCTION ---
+        # --- PASO BLINDADO DE PRE-DESTRUCTION MEJORADO ---
       - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
-          echo "Conectando al clúster antes de destruirlo para barrer Ingress, LoadBalancers y liberar dependencias de AWS..."
+          echo "Conectando al clúster para barrer HPA, Ingress, Services y liberar ALBs de AWS..."
           
           cd ./infra/environments/dev
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
@@ -57,18 +65,28 @@ jobs:
             echo "Clúster detectado: $CLUSTER_NAME. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
-            echo "1. Borrando objetos HPA y Ingress para forzar a AWS a eliminar los ALBs asociados..."
+            echo "1. Borrando objetos HPA, Ingress y StatefulSets..."
             kubectl delete hpa --all --all-namespaces --timeout=30s || true
             kubectl delete ingress --all --all-namespaces --timeout=60s || true
+            kubectl delete statefulset --all --all-namespaces --timeout=60s || true
             
-            echo "2. Eliminando todos los servicios Kubernetes..."
+            echo "2. Eliminando todos los servicios Kubernetes para forzar la caída de los ALBs..."
             kubectl delete svc --all --all-namespaces --timeout=30s || true
             
-            echo "3. Desinstalando el AWS Load Balancer Controller vía Helm para apagar el controlador..."
+            echo "3. Desinstalando el AWS Load Balancer Controller vía Helm..."
             helm uninstall aws-load-balancer-controller -n kube-system || true
             
-            echo "4. Esperando 90 segundos obligatorios para que AWS destruya físicamente los ALBs y libere las ENIs..."
-            sleep 90
+            echo "4. Esperando de forma inteligente a que AWS libere las ENIs y los ALBs..."
+            # Bucle de espera pasiva para asegurar que la red quede libre antes de que Terraform toque la VPC
+            for i in {1..12}; do
+              ENI_COUNT=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values=$(terraform output -raw vpc_id 2>/dev/null || echo "none") --query 'length(NetworkInterfaces[?Status==`in-use`])' --output text 2>/dev/null || echo "0")
+              if [ "$ENI_COUNT" -eq "0" ] || [ -z "$ENI_COUNT" ]; then
+                echo "¡Todas las ENIs de la VPC han sido liberadas por AWS!"
+                break
+              fi
+              echo "Intento $i/12: Aún quedan $ENI_COUNT ENIs activas en la VPC. Esperando 15 segundos..."
+              sleep 15
+            done
           else
             echo "No se encontró un clúster activo o ya fue destruido. Saltando limpieza de K8s."
           fi
