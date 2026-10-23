@@ -131,11 +131,25 @@ jobs:
             --set region=us-east-1 \
             --set vpcId="$VPC_ID"
 
-      # --- INSTALAR EL METRICS SERVER PARA EL HPA ---
+        # --- INSTALAR EL METRICS SERVER PARA EL HPA ---
       - name: Install Metrics Server via Helm
         if: github.event.inputs.action != 'destroy'
         working-directory: ./infra/environments/dev
         run: |
+          echo "Esperando a que el webhook del Load Balancer Controller esté listo..."
+          for i in {1..12}; do
+            if kubectl get endpoints aws-load-balancer-webhook-service -n kube-system &>/dev/null; then
+              # Validar que los endpoints no estén vacíos
+              ENDPOINTS=$(kubectl get endpoints aws-load-balancer-webhook-service -n kube-system -o jsonpath='{.subsets[*].addresses[*].ip}')
+              if [ -n "$ENDPOINTS" ]; then
+                echo "¡Webhook del LBC listo y con endpoints activos!"
+                break
+              fi
+            fi
+            echo "Intento $i/12: Esperando endpoints del webhook del LBC..."
+            sleep 10
+          done
+
           echo "Agregando repositorio de Helm para Metrics Server..."
           helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
           helm repo update
