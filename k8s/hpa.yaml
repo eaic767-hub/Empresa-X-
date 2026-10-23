@@ -1,0 +1,19 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: php-app-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: hola-mundo-deployment #mismo nombre del statefulset
+  minReplicas: 2 #<-- minimo de replicas especificadas en statefulset
+  maxReplicas: 10 #<-- maximo para que cluster no explote con costos
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70 #<-- Si la cpu pasa el 70%, el HPA escala automaticamente

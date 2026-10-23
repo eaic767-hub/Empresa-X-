@@ -57,7 +57,8 @@ jobs:
             echo "Clúster detectado: $CLUSTER_NAME. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
-            echo "1. Borrando objetos Ingress para forzar a AWS a eliminar los ALBs asociados..."
+            echo "1. Borrando objetos HPA y Ingress para forzar a AWS a eliminar los ALBs asociados..."
+            kubectl delete hpa --all --all-namespaces --timeout=30s || true
             kubectl delete ingress --all --all-namespaces --timeout=60s || true
             
             echo "2. Eliminando todos los servicios Kubernetes..."
@@ -129,6 +130,19 @@ jobs:
             --set serviceAccount.name=aws-load-balancer-controller \
             --set region=us-east-1 \
             --set vpcId="$VPC_ID"
+
+      # --- INSTALAR EL METRICS SERVER PARA EL HPA ---
+      - name: Install Metrics Server via Helm
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          echo "Agregando repositorio de Helm para Metrics Server..."
+          helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+          helm repo update
+
+          echo "Instalando Metrics Server en el clúster para habilitar el Auto-Escalado (HPA)..."
+          helm upgrade --install metrics-server metrics-server/metrics-server \
+            --namespace kube-system
 
       - name: Extract ECR Repository Name
         id: extract-ecr
@@ -213,3 +227,4 @@ jobs:
           kubectl apply -f k8s/statefulset.yaml
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/hpa.yaml
