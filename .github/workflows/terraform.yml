@@ -51,7 +51,6 @@ jobs:
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate"
 
-      # --- FASE 1: DESTRUCCIÓN Y LIMPIEZA PREVIA BLINDADA ---
       - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
@@ -63,7 +62,7 @@ jobs:
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           
           if [ -n "$CLUSTER_NAME" ] && [ -n "$VPC_ID" ]; then
-            echo "Clúster detectado: $CLUSTER_NAME en la VPC:$VPC_ID. Actualizando kubeconfig..."
+            echo "Clúster detectado: $CLUSTER_NAME en la VPC: $VPC_ID. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
             echo "1. Desinstalando charts de Helm conflictivos (Prometheus, LBC)..."
@@ -103,7 +102,6 @@ jobs:
             echo "No se encontró un clúster activo o los outputs no están disponibles. Saltando limpieza de K8s y pasando directo a Terraform."
           fi
 
-      # --- FASE 2: EJECUCIÓN DE APPLY O DESTROY CON AUTO-APPROVE ---
       - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
         run: |
@@ -120,7 +118,6 @@ jobs:
             terraform apply -auto-approve
           fi
 
-      # --- FASE 3: POST-APPLY CONFIGURACIONES (Solo si NO es destroy) ---
       - name: Configure Kubeconfig & Deploy LBC ServiceAccount
         if: github.event.inputs.action != 'destroy'
         working-directory: ./infra/environments/dev
@@ -245,4 +242,23 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update Kubeconfig for EKS
+        env:
+          EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
+        run: |
+          for i in {1..5}; do
+            aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || sleep 15
+          done
+          kubectl cluster-info
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          kubectl apply -f k8s/storage-class.yaml
+          kubectl apply -f k8s/statefulset.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/hpa.yaml
