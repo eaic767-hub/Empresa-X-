@@ -120,24 +120,8 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   - job_name: 'node_exporter'
-    ec2_sd_configs:
-      - region: ${var.aws_region}
-        port: 9100
-    relabel_configs:
-      - source_labels: [__meta_ec2_tag_Environment]
-        regex: ${var.environment}
-        action: keep
-      - source_labels: [__meta_ec2_instance_state]
-        regex: running
-        action: keep
-      - source_labels: [__meta_ec2_private_ip]
-        regex: (.*)
-        target_label: __address__
-        replacement: '$1:9100'
-      - source_labels: [__meta_ec2_private_ip]
-        regex: (.*)
-        target_label: instance
-        replacement: '$1'
+    static_configs:
+      - targets: ['localhost:9100']
 CONFIG
 
 # 4. Inyección dinámica del job de EKS consultando la API de AWS al arrancar
