@@ -42,17 +42,17 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Init (Limpieza profunda y reconfiguración)
+      - name: Terraform Init (Purga total de caché y reconfiguración)
         working-directory: ./infra/environments/dev
         run: |
           BRANCH_NAME="${GITHUB_REF_NAME}"
           SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
           
-          echo "Borrando caché local y bloqueos previos..."
+          echo "Borrando caché local de submódulos y bloqueos previos..."
+          rm -rf .terraform .terraform.lock.hcl
           find . -type d -name ".terraform" -exec rm -rf {} +
-          rm -f .terraform.lock.hcl
           
-          echo "Inicializando Terraform para la rama: $SAFE_BRANCH_NAME"
+          echo "Inicializando Terraform con descarga limpia para la rama: $SAFE_BRANCH_NAME"
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
             -reconfigure \
@@ -126,136 +126,4 @@ jobs:
         working-directory: ./infra/environments/dev
         run: |
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
-          ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_irsa_iam_role_arn || echo "")
-          
-          if [ -n "$CLUSTER_NAME" ]; then
-            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
-          fi
-          
-          if [ -n "$ROLE_ARN" ]; then
-            kubectl create serviceaccount aws-load-balancer-controller -n kube-system --dry-run=client -o yaml | kubectl apply -f -
-            kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn="$ROLE_ARN" --overwrite
-          fi
-
-      - name: Deploy Prometheus Stack via Helm CLI
-        if: github.event.inputs.action != 'destroy'
-        run: |
-          echo "1. Creando namespace de monitoreo..."
-          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-          
-          echo "2. Agregando repositorio Prometheus Community..."
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
-          
-          echo "3. Instalando kube-prometheus-stack con values.yaml..."
-          helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack \
-            --namespace monitoring \
-            --version "55.5.0" \
-            -f infra/modules/monitoring/values.yaml
-
-      - name: Install AWS Load Balancer Controller via Helm
-        if: github.event.inputs.action != 'destroy'
-        working-directory: ./infra/environments/dev
-        run: |
-          helm repo add eks https://aws.github.io/eks-charts
-          helm repo update
-
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
-          VPC_ID=$(terraform output -raw vpc_id || echo "")
-
-          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-            --namespace kube-system \
-            --set clusterName="$CLUSTER_NAME" \
-            --set serviceAccount.create=false \
-            --set serviceAccount.name=aws-load-balancer-controller \
-            --set region=us-east-1 \
-            --set vpcId="$VPC_ID"
-
-      - name: Install Metrics Server via Helm
-        if: github.event.inputs.action != 'destroy'
-        working-directory: ./infra/environments/dev
-        run: |
-          sleep 15
-          helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
-          helm repo update
-          helm upgrade --install metrics-server metrics-server/metrics-server \
-            --namespace kube-system
-
-      - name: Extract ECR Repository Name
-        id: extract-ecr
-        working-directory: ./infra/environments/dev
-        if: github.event.inputs.action != 'destroy'
-        run: |
-          REPO_NAME=$(terraform output -raw ecr_repository_name)
-          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
-
-      - name: Extract EKS Cluster Name
-        id: extract-eks
-        working-directory: ./infra/environments/dev
-        if: github.event.inputs.action != 'destroy'
-        run: |
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
-          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
-
-  docker-build:
-    name: Build & Push Docker Image
-    needs: terraform
-    if: github.event.inputs.action != 'destroy'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to Amazon ECR
-        working-directory: ./app
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: ${{ needs.terraform.outputs.ecr_repo }}
-          IMAGE_TAG: latest
-        run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-  deploy-k8s:
-    name: Deploy to Kubernetes
-    needs: [terraform, docker-build]
-    if: github.event.inputs.action != 'destroy'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Update Kubeconfig for EKS
-        env:
-          EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
-        run: |
-          for i in {1..5}; do
-            aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || sleep 15
-          done
-          kubectl cluster-info
-
-      - name: Apply Kubernetes Manifests
-        run: |
-          kubectl apply -f k8s/storage-class.yaml
-          kubectl apply -f k8s/statefulset.yaml
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/ingress.yaml
-          kubectl apply -f k8s/hpa.yaml
+          ROLE_ARN=$(terraform output -raw aws_load_balancer_controller

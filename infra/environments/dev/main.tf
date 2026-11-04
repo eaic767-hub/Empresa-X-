@@ -81,19 +81,6 @@ module "asg" {
   root_volume_size      = var.root_volume_size
 }
 
-# Modulo DE MONITOREO CON HELM Y KUBE-PROMETHEUS-STACK
-module "monitoring" {
-  source = "../../modules/monitoring"
-
-  environment                        = var.environment
-  resource_prefix                    = var.resource_prefix
-  cluster_name                       = module.EKS.cluster_name
-  cluster_endpoint                   = module.EKS.cluster_endpoint
-  cluster_certificate_authority_data = module.EKS.cluster_certificate_authority_data
-  cluster_oidc_issuer_url            = module.EKS.oidc_issuer_url
-
-  depends_on = [module.EKS]
-}
 #-------------------------------------------------K8S-----------------------------------------------------------------
 # Modulo DE K8S EKS
 module "EKS" {
