@@ -51,7 +51,7 @@ jobs:
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate"
 
-# --- FASE 1: DESTRUCCIÓN Y LIMPIEZA PREVIA BLINDADA ---
+      # --- FASE 1: DESTRUCCIÓN Y LIMPIEZA PREVIA BLINDADA ---
       - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
@@ -59,12 +59,11 @@ jobs:
           
           cd ./infra/environments/dev
           
-          # Intentamos extraer los outputs de forma segura; si falla, no rompemos el script de inmediato
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "")
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           
           if [ -n "$CLUSTER_NAME" ] && [ -n "$VPC_ID" ]; then
-            echo "Clúster detectado: $CLUSTER_NAME en la VPC: $VPC_ID. Actualizando kubeconfig..."
+            echo "Clúster detectado: $CLUSTER_NAME en la VPC:$VPC_ID. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
             echo "1. Desinstalando charts de Helm conflictivos (Prometheus, LBC)..."
@@ -104,7 +103,7 @@ jobs:
             echo "No se encontró un clúster activo o los outputs no están disponibles. Saltando limpieza de K8s y pasando directo a Terraform."
           fi
 
-      # --- FASE 2: EJECUCIÓN DE APPLY O DESTROY ---
+      # --- FASE 2: EJECUCIÓN DE APPLY O DESTROY CON AUTO-APPROVE ---
       - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
         run: |
@@ -114,10 +113,10 @@ jobs:
           fi
           
           if [ "$ACTION" = "destroy" ]; then
-            echo "Ejecutando Terraform Destroy..."
+            echo "Ejecutando Terraform Destroy con auto-approve..."
             terraform destroy -auto-approve
           else
-            echo "Ejecutando Terraform Apply..."
+            echo "Ejecutando Terraform Apply con auto-approve..."
             terraform apply -auto-approve
           fi
 
@@ -246,23 +245,4 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Update Kubeconfig for EKS
-        env:
-          EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
-        run: |
-          for i in {1..5}; do
-            aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || sleep 15
-          done
-          kubectl cluster-info
-
-      - name: Apply Kubernetes Manifests
-        run: |
-          kubectl apply -f k8s/storage-class.yaml
-          kubectl apply -f k8s/statefulset.yaml
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/ingress.yaml
-          kubectl apply -f k8s/hpa.yaml
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID
