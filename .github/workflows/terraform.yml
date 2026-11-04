@@ -141,11 +141,16 @@ jobs:
       # ---INSTALACION DE DEPLOY PROMETHEUS RBAC TO EKS PARA CONECTAR METRICAS A PROMETHEUS---
       - name: Deploy Prometheus RBAC to EKS
         if: github.event.inputs.action != 'destroy'
-        working-directory: ./infra/environments/dev
         run: |
+          echo "Buscando la raíz del repositorio de forma dinámica..."
+          # Si estamos en GitHub Actions, usa GITHUB_WORKSPACE; si estás local, usa git.
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
+          
+          echo "Raíz del proyecto encontrada en: $REPO_ROOT"
           echo "Creando namespace de monitoreo y aplicando RBAC para Prometheus..."
+          
           kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-          kubectl apply -f ../../k8s/prometheus-rbac.yaml
+          kubectl apply -f "$REPO_ROOT/k8s/prometheus-rbac.yaml"
 
       # --- INSTALAR EL AWS LOAD BALANCER CONTROLLER VÍA HELM ---
       - name: Install AWS Load Balancer Controller via Helm
