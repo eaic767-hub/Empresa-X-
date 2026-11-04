@@ -5,6 +5,12 @@ grafana:
   service:
     type: LoadBalancer
     port: 3000
+  additionalDataSources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus-stack-kube-prom-prometheus.monitoring.svc.cluster.local:9090
+      isDefault: true
 
 prometheus:
   prometheusSpec:
