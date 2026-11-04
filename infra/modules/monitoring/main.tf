@@ -79,7 +79,7 @@ resource "aws_security_group" "monitoring_sg" {
 }
 
 #------------------------------------------------------------------------------
-# SERVIDOR EC2 DE MONITOREO
+# SERVIDOR EC2 DE MONITOREO (TOTALMENTE AUTOMATIZADO - K8S + EC2)
 #------------------------------------------------------------------------------
 resource "aws_instance" "monitoring_server" {
   ami                    = var.ami_id
@@ -94,21 +94,44 @@ resource "aws_instance" "monitoring_server" {
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y docker.io docker-compose-v2 curl
-systemctl enable --now docker
+apt-get install -y docker.io docker-compose-v2 curl wget
 
-# 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
+# 1. Instalar y configurar Node Exporter de forma nativa como servicio del sistema
+NODE_EXPORTER_VERSION="1.7.0"
+cd /tmp
+wget https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+tar xvf node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+cp node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/
+chmod +x /usr/local/bin/node_exporter
+
+# Crear servicio systemd para Node Exporter
+cat << 'SERVICE' > /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=nobody
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable --now node_exporter
+
+# 2. Crear la estructura de carpetas necesaria para Prometheus y Grafana
 mkdir -p /opt/monitoring/grafana/provisioning/datasources
 mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 mkdir -p /opt/monitoring/data/prometheus
 cd /opt/monitoring
 
-# 2. Configurar permisos iniciales para la persistencia de Prometheus y Grafana
-# UID 472 es el usuario interno predeterminado de Grafana
+# 3. Aplicar permisos críticos (UID 472 para Grafana y 777 para Prometheus)
 chown -R 472:472 /opt/monitoring/grafana
 chmod -R 777 /opt/monitoring/data/prometheus
 
-# 3. Configurar prometheus.yml base con auto-descubrimiento EC2
+# 4. Configurar prometheus.yml con targets locales y soporte para Kubernetes (Kube-State-Metrics)
 cat << 'CONFIG' > prometheus.yml
 global:
   scrape_interval: 15s
@@ -122,30 +145,11 @@ scrape_configs:
   - job_name: 'node_exporter'
     static_configs:
       - targets: ['localhost:9100']
-CONFIG
 
-# 4. Inyección dinámica del job de EKS consultando la API de AWS al arrancar
-echo "Descubriendo endpoint del clúster EKS para Prometheus..."
-CLUSTER_NAME=$(aws eks list-clusters --region ${var.aws_region} --query 'clusters[0]' --output text 2>/dev/null || echo "")
-
-if [ -n "$CLUSTER_NAME" ] && [ "$CLUSTER_NAME" != "None" ]; then
-  EKS_ENDPOINT=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region ${var.aws_region} --query 'cluster.endpoint' --output text 2>/dev/null || echo "")
-  
-  if [ -n "$EKS_ENDPOINT" ] && [ "$EKS_ENDPOINT" != "None" ]; then
-    CLEAN_ENDPOINT=$${EKS_ENDPOINT#https://}
-    echo "¡Clúster EKS detectado! Agregando scraping dinámico para: $CLEAN_ENDPOINT"
-    
-    cat << 'EKSJOB' >> prometheus.yml
-
-  - job_name: "kubernetes-cluster"
-    scheme: https
-    tls_config:
-      insecure_skip_verify: true
+  - job_name: 'kube-state-metrics'
     static_configs:
-      - targets: ["$CLEAN_ENDPOINT"]
-EKSJOB
-  fi
-fi
+      - targets: ['kube-state-metrics.kube-system.svc:8080']
+CONFIG
 
 # 5. Auto-aprovisionar Datasource de Prometheus en Grafana
 cat << 'DATASOURCE' > grafana/provisioning/datasources/prometheus.yml
@@ -159,7 +163,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 6. Configurar el Provider de Dashboards para Grafana (Ruta alineada al volumen montado)
+# 6. Configurar el Provider de Dashboards para Grafana
 cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -173,40 +177,14 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
-# 7. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
+# 7. Descargar automáticamente los Dashboards oficiales: Node Exporter (1860) y Kubernetes (3115)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
+curl -s https://grafana.com/api/dashboards/3115/revisions/3/download -o grafana/provisioning/dashboards/kubernetes.json
 
-# 8. Inyectar automáticamente el Dashboard de Kubernetes optimizado
-cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
-{
-  "annotations": { "list": [] },
-  "editable": true,
-  "panels": [
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
-      "id": 1,
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(kube_node_info)",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Nodes",
-      "type": "stat"
-    }
-  ],
-  "refresh": "10s",
-  "title": "Kubernetes Cluster (Auto Provisioned)",
-  "uid": "k8s-cluster-auto"
-}
-K8SDASH
-
-# Volver a asegurar permisos correctos justo antes de levantar los contenedores
+# Asegurar permisos finales en Grafana antes de levantar contenedores
 chown -R 472:472 /opt/monitoring/grafana
 
-# 9. Crear docker-compose.yml limpio y con volúmenes corregidos
+# 8. Crear docker-compose.yml y levantar la pila
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
@@ -238,7 +216,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-# 10. Levantar la pila completa de contenedores de forma automatizada
+systemctl enable --now docker
 docker compose up -d
 EOF
   )
