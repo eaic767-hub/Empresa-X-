@@ -1,0 +1,286 @@
+name: Terraform Deploy & Destroy
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to execute'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform Provisioning
+    runs-on: ubuntu-latest
+    outputs:
+      ecr_repo: ${{ steps.extract-ecr.outputs.repo_name }}
+      eks_cluster: ${{ steps.extract-eks.outputs.cluster_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init (Purga Total y Limpieza Agresiva de Caché)
+        working-directory: ./infra/environments/dev
+        run: |
+          BRANCH_NAME="${GITHUB_REF_NAME}"
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
+          
+          echo "=== PURGA PROFUNDA DE CACHÉ Y MÓDULOS ==="
+          rm -rf .terraform .terraform.lock.hcl
+          find . -type d -name ".terraform" -exec rm -rf {} +
+          find . -type d -name ".terraform.tfstate.lock.info" -exec rm -rf {} + 2>/dev/null || true
+          
+          echo "Inicializando Terraform con -reconfigure y -upgrade para la rama: $SAFE_BRANCH_NAME"
+          terraform init \
+            -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
+            -reconfigure \
+            -upgrade
+
+      - name: Pre-Destroy Cleanup & ENI Release
+        if: github.event.inputs.action == 'destroy' || contains(github.workflow, 'Destroy')
+        run: |
+          echo "=== MODO DESTRUCCIÓN BLINDADO ACTIVADO ==="
+          cd ./infra/environments/dev
+          
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "")
+          VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
+          
+          if [ -n "$CLUSTER_NAME" ]; then
+            echo "Intentando actualizar kubeconfig..."
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" 2>/dev/null || echo "Clúster ya no accesible en AWS."
+            
+            echo "1. Desinstalando charts de Helm..."
+            helm uninstall prometheus-stack -n monitoring 2>/dev/null || true
+            helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
+            helm uninstall metrics-server -n kube-system 2>/dev/null || true
+            
+            echo "2. Purgando recursos y namespaces..."
+            kubectl delete ingress --all --all-namespaces --timeout=10s 2>/dev/null || true
+            kubectl delete svc --all --all-namespaces --timeout=10s 2>/dev/null || true
+            kubectl delete namespace monitoring --timeout=15s 2>/dev/null || true
+          else
+            echo "Outputs de Terraform no encontrados o clúster ya destruido."
+          fi
+
+          if [ -n "$VPC_ID" ]; then
+            echo "3. Liberando ENIs retenidas en la VPC $VPC_ID..."
+            for i in {1..5}; do
+              ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
+              
+              if [ -z "$ENI_IDS" ]; then
+                echo "¡No hay ENIs bloqueantes!"
+                break
+              fi
+              
+              for eni in $ENI_IDS; do
+                ATTACHMENT_ID=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].attachment.attachmentId' --output text 2>/dev/null || echo "")
+                if [ -n "$ATTACHMENT_ID" ] && [ -n "$ATTACHMENT_ID" != "None" ]; then
+                  aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID" --force 2>/dev/null || true
+                fi
+              done
+              sleep 5
+            done
+          fi
+
+      - name: Forzar limpieza de estado huérfano en S3
+        working-directory: ./infra/environments/dev
+        run: |
+          echo "Eliminando referencias a módulos o recursos antiguos del state remoto si existen..."
+          terraform state rm module.monitoring 2>/dev/null || true
+
+      - name: Terraform Apply or Destroy
+        working-directory: ./infra/environments/dev
+        run: |
+          ACTION="${{ github.event.inputs.action }}"
+          if [ -z "$ACTION" ]; then
+            ACTION="apply"
+          fi
+          
+          if [ "$ACTION" = "destroy" ]; then
+            echo "Ejecutando Terraform Destroy..."
+            terraform destroy -auto-approve
+          else
+            echo "Ejecutando Terraform Apply..."
+            terraform refresh || true
+            terraform apply -auto-approve
+          fi
+
+      - name: Configure Kubeconfig & Deploy LBC ServiceAccount
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_irsa_iam_role_arn || echo "")
+          
+          if [ -n "$CLUSTER_NAME" ]; then
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
+          fi
+          
+          if [ -n "$ROLE_ARN" ]; then
+            kubectl create serviceaccount aws-load-balancer-controller -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+            kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn="$ROLE_ARN" --overwrite
+          fi
+
+      - name: Clean up stuck monitoring namespace
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          echo "Verificando estado del namespace monitoring..."
+          if kubectl get namespace monitoring 2>/dev/null | grep -q "Terminating"; then
+            echo "El namespace monitoring está atascado en Terminating. Forzando eliminación de finalizadores..."
+            kubectl get namespace monitoring -o json | tr -d '\n' | sed 's/"kubernetes"//g' | kubectl replace --raw /api/v1/namespaces/monitoring/finalize -f -
+            
+            echo "Esperando a que el namespace se elimine por completo..."
+            for i in {1..30}; do
+              if ! kubectl get namespace monitoring 2>/dev/null; then
+                echo "Namespace eliminado exitosamente."
+                break
+              fi
+              sleep 2
+            done
+          fi
+
+      - name: Deploy Prometheus Stack via Helm CLI
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          echo "1. Creando namespace de monitoreo..."
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "2. Agregando repositorio Prometheus Community..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          echo "3. Instalando kube-prometheus-stack con values.yaml personalizado..."
+          helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --version "55.5.0" \
+            -f infra/modules/monitoring/values.yaml
+
+      - name: Install AWS Load Balancer Controller via Helm
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          VPC_ID=$(terraform output -raw vpc_id || echo "")
+
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName="$CLUSTER_NAME" \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set region=us-east-1 \
+            --set vpcId="$VPC_ID"
+
+      - name: Install Metrics Server via Helm
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          sleep 15
+          helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+          helm repo update
+          helm upgrade --install metrics-server metrics-server/metrics-server \
+            --namespace kube-system
+
+      - name: Extract ECR Repository Name
+        id: extract-ecr
+        working-directory: ./infra/environments/dev
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          REPO_NAME=$(terraform output -raw ecr_repository_name)
+          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+      - name: Extract EKS Cluster Name
+        id: extract-eks
+        working-directory: ./infra/environments/dev
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+
+  docker-build:
+    name: Build & Push Docker Image
+    needs: terraform
+    if: github.event.inputs.action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        working-directory: ./app
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: ${{ needs.terraform.outputs.ecr_repo }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+  deploy-k8s:
+    name: Deploy to Kubernetes
+    needs: [terraform, docker-build]
+    if: github.event.inputs.action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update Kubeconfig for EKS
+        env:
+          EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
+        run: |
+          for i in {1..5}; do
+            aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || sleep 15
+          done
+          kubectl cluster-info
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          kubectl apply -f k8s/storage-class.yaml
+          kubectl apply -f k8s/statefulset.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/hpa.yaml
