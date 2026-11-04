@@ -42,16 +42,17 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Init (Limpieza total de HashiCorp y Plugins)
+      - name: Terraform Init (Limpieza profunda y reconfiguración)
         working-directory: ./infra/environments/dev
         run: |
           BRANCH_NAME="${GITHUB_REF_NAME}"
           SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
           
-          echo "Limpiando caché local de plugins y bloqueos en el runner..."
-          rm -rf .terraform .terraform.lock.hcl
+          echo "Borrando caché local y bloqueos previos..."
+          find . -type d -name ".terraform" -exec rm -rf {} +
+          rm -f .terraform.lock.hcl
           
-          echo "Inicializando Terraform con descarga limpia de plugins para la rama: $SAFE_BRANCH_NAME"
+          echo "Inicializando Terraform para la rama: $SAFE_BRANCH_NAME"
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
             -reconfigure \
@@ -67,29 +68,29 @@ jobs:
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           
           if [ -n "$CLUSTER_NAME" ]; then
-            echo "Intentando actualizar kubeconfig (si el clúster existe)..."
-            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" 2>/dev/null || echo "Clúster ya no accesible en AWS, saltando kubeconfig."
+            echo "Intentando actualizar kubeconfig..."
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" 2>/dev/null || echo "Clúster ya no accesible en AWS."
             
-            echo "1. Desinstalando charts de Helm de forma segura..."
+            echo "1. Desinstalando charts de Helm..."
             helm uninstall prometheus-stack -n monitoring 2>/dev/null || true
             helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
             helm uninstall metrics-server -n kube-system 2>/dev/null || true
             
-            echo "2. Purgando objetos de red y namespaces de K8s..."
+            echo "2. Purgando recursos y namespaces..."
             kubectl delete ingress --all --all-namespaces --timeout=10s 2>/dev/null || true
             kubectl delete svc --all --all-namespaces --timeout=10s 2>/dev/null || true
             kubectl delete namespace monitoring --timeout=15s 2>/dev/null || true
           else
-            echo "Outputs de Terraform no encontrados o clúster ya destruido. Pasando a limpieza de red física..."
+            echo "Outputs de Terraform no encontrados o clúster ya destruido."
           fi
 
           if [ -n "$VPC_ID" ]; then
-            echo "3. Liberando ENIs retenidas por balanceadores en la VPC $VPC_ID..."
+            echo "3. Liberando ENIs retenidas en la VPC $VPC_ID..."
             for i in {1..5}; do
               ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
               
               if [ -z "$ENI_IDS" ]; then
-                echo "¡No hay ENIs bloqueantes en la VPC!"
+                echo "¡No hay ENIs bloqueantes!"
                 break
               fi
               
@@ -103,7 +104,7 @@ jobs:
             done
           fi
 
-      - name: Terraform Refresh & Apply
+      - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
         run: |
           ACTION="${{ github.event.inputs.action }}"
@@ -112,10 +113,10 @@ jobs:
           fi
           
           if [ "$ACTION" = "destroy" ]; then
-            echo "Ejecutando Terraform Destroy con auto-approve..."
+            echo "Ejecutando Terraform Destroy..."
             terraform destroy -auto-approve
           else
-            echo "Forzando actualización del estado y ejecutando Apply..."
+            echo "Ejecutando Terraform Apply..."
             terraform refresh || true
             terraform apply -auto-approve
           fi
@@ -136,25 +137,21 @@ jobs:
             kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn="$ROLE_ARN" --overwrite
           fi
 
-      - name: Deploy Prometheus Stack via Helm (Reemplazo del Provider)
+      - name: Deploy Prometheus Stack via Helm CLI
         if: github.event.inputs.action != 'destroy'
         run: |
-          echo "1. Creando namespace de monitoreo de forma dinámica..."
+          echo "1. Creando namespace de monitoreo..."
           kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
           
-          echo "2. Agregando repositorio de Helm para Prometheus..."
+          echo "2. Agregando repositorio Prometheus Community..."
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
           
-          echo "3. Instalando kube-prometheus-stack mediante Helm CLI..."
+          echo "3. Instalando kube-prometheus-stack con values.yaml..."
           helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --version "55.5.0" \
-            --set grafana.enabled=true \
-            --set grafana.adminUser=admin \
-            --set grafana.adminPassword=admin \
-            --set grafana.service.type=LoadBalancer \
-            --set grafana.service.port=3000
+            -f infra/modules/monitoring/values.yaml
 
       - name: Install AWS Load Balancer Controller via Helm
         if: github.event.inputs.action != 'destroy'
