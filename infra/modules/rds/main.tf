@@ -82,6 +82,14 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   skip_final_snapshot    = true
 
+  lifecycle {
+    ignore_changes = [
+      # Ignora cambios accidentales o re-evaluaciones automáticas de motor o contraseña si no se modificaron explícitamente
+      engine_version,
+      password,
+    ]
+  }
+
   tags = {
     Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-${var.engine}-db" : "${var.environment}-${var.engine}-db"
     Environment = var.environment
