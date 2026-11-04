@@ -62,7 +62,7 @@ cd /opt/monitoring
 # 2. Configurar permisos iniciales para la persistencia de Prometheus
 chmod -R 777 data/prometheus
 
-# 3. Configurar prometheus.yml con auto-descubrimiento EC2 blindado (Usando 'CONFIG' con comillas simples para proteger los $1)
+# 3. Configurar prometheus.yml base con auto-descubrimiento EC2
 cat << 'CONFIG' > prometheus.yml
 global:
   scrape_interval: 5s
@@ -101,7 +101,28 @@ scrape_configs:
         replacement: '$1'
 CONFIG
 
-# 4. Auto-aprovisionar Datasource de Prometheus en Grafana
+# 4. Inyección dinámica del job de EKS (Módulo 4) consultando la API de AWS al arrancar
+echo "Descubriendo endpoint del clúster EKS para Prometheus..."
+EKS_ENDPOINT=\$(aws eks describe-cluster --name "\$(aws eks list-clusters --query 'clusters[0]' --output text)" --region ${var.aws_region} --query 'cluster.endpoint' --output text 2>/dev/null || echo "")
+
+if [ -n "\$EKS_ENDPOINT" ] && [ "\$EKS_ENDPOINT" != "None" ]; then
+  CLEAN_ENDPOINT=\$${EKS_ENDPOINT#https://}
+  echo "¡Clúster EKS detectado! Agregando scraping dinámico para: \$CLEAN_ENDPOINT"
+  
+  cat << 'EKSJOB' >> prometheus.yml
+
+  - job_name: "kubernetes-cluster"
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets: ["\$CLEAN_ENDPOINT"]
+EKSJOB
+else
+  echo "Aviso: No se encontró un clúster EKS activo en este momento. Se omitió el scrape de Kubernetes."
+fi
+
+# 5. Auto-aprovisionar Datasource de Prometheus en Grafana
 cat << 'DATASOURCE' > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
@@ -113,7 +134,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 5. Configurar el Provider de Dashboards para Grafana
+# 6. Configurar el Provider de Dashboards para Grafana
 cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -127,10 +148,10 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
-# 6. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
+# 7. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 7. Crear docker-compose.yml con Prometheus y Grafana
+# 8. Crear docker-compose.yml con Prometheus y Grafana
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
@@ -161,7 +182,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
-# 8. Levantar la pila completa de contenedores de forma automatizada
+# 9. Levantar la pila completa de contenedores de forma automatizada
 docker-compose up -d
 EOF
   )

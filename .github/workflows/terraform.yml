@@ -52,41 +52,51 @@ jobs:
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate"
 
-        # --- PASO BLINDADO DE PRE-DESTRUCTION MEJORADO ---
+      # --- PASO DE PRE-DESTRUCTION BLINDADO Y AGRESIVO --- 
       - name: Pre-Destroy Cleanup & ENI Release
         if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
         run: |
-          echo "Conectando al clúster para barrer HPA, Ingress, Services y liberar ALBs de AWS..."
+          echo "Iniciando barrido quirúrgico y liberación de red en AWS..."
           
           cd ./infra/environments/dev
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          VPC_ID=$(terraform output -raw vpc_id || echo "")
           
-          if [ -n "$CLUSTER_NAME" ]; then
-            echo "Clúster detectado: $CLUSTER_NAME. Actualizando kubeconfig..."
+          if [ -n "$CLUSTER_NAME" ] && [ -n "$VPC_ID" ]; then
+            echo "Clúster detectado: $CLUSTER_NAME en la VPC: $VPC_ID. Actualizando kubeconfig..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
-            echo "1. Borrando objetos HPA, Ingress y StatefulSets..."
-            kubectl delete hpa --all --all-namespaces --timeout=30s || true
-            kubectl delete ingress --all --all-namespaces --timeout=60s || true
-            kubectl delete statefulset --all --all-namespaces --timeout=60s || true
-            
-            echo "2. Eliminando todos los servicios Kubernetes para forzar la caída de los ALBs..."
+            echo "1. Purgando todos los objetos que retienen balanceadores (Ingress, Services, StatefulSets, HPA)..."
+            kubectl delete hpa --all --all-namespaces --timeout=20s || true
+            kubectl delete ingress --all --all-namespaces --timeout=30s || true
             kubectl delete svc --all --all-namespaces --timeout=30s || true
+            kubectl delete statefulset --all --all-namespaces --timeout=30s || true
             
-            echo "3. Desinstalando el AWS Load Balancer Controller vía Helm..."
+            echo "2. Desinstalando controladores de Helm..."
             helm uninstall aws-load-balancer-controller -n kube-system || true
             
-            echo "4. Esperando de forma inteligente a que AWS libere las ENIs y los ALBs..."
-            # Bucle de espera pasiva para asegurar que la red quede libre antes de que Terraform toque la VPC
-            for i in {1..12}; do
-              ENI_COUNT=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values=$(terraform output -raw vpc_id 2>/dev/null || echo "none") --query 'length(NetworkInterfaces[?Status==`in-use`])' --output text 2>/dev/null || echo "0")
-              if [ "$ENI_COUNT" -eq "0" ] || [ -z "$ENI_COUNT" ]; then
-                echo "¡Todas las ENIs de la VPC han sido liberadas por AWS!"
+            echo "3. Forzando la liberación de ENIs y desvinculando Network Interfaces colgadas..."
+            # Forzar la revisión y desconexión de interfaces de red asociadas a load balancers
+            for i in {1..8}; do
+              ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`) || contains(OwnerId, `amazon`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
+              
+              if [ -z "$ENI_IDS" ]; then
+                echo "¡No quedan ENIs bloqueantes de balanceadores en la VPC!"
                 break
               fi
-              echo "Intento $i/12: Aún quedan $ENI_COUNT ENIs activas en la VPC. Esperando 15 segundos..."
-              sleep 15
+              
+              echo "Intento $i/8: Encontradas ENIs retenidas ($ENI_IDS). Intentando desasociar..."
+              for eni in $ENI_IDS; do
+                ATTACHMENT_ID=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].attachment.attachmentId' --output text 2>/dev/null || echo "")
+                if [ -n "$ATTACHMENT_ID" ] && [ "$ATTACHMENT_ID" != "None" ]; then
+                  aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID" --force || true
+                fi
+              done
+              sleep 10
             done
+            
+            echo "4. Pausa de estabilización final de red..."
+            sleep 15
           else
             echo "No se encontró un clúster activo o ya fue destruido. Saltando limpieza de K8s."
           fi
@@ -127,6 +137,15 @@ jobs:
           else
             echo "Aviso: No se pudo obtener el ARN del rol IRSA desde Terraform outputs."
           fi
+
+      # ---INSTALACION DE DEPLOY PROMETHEUS RBAC TO EKS PARA CONECTAR METRICAS A PROMETHEUS---
+      - name: Deploy Prometheus RBAC to EKS
+        if: github.event.inputs.action != 'destroy'
+        working-directory: ./infra/environments/dev
+        run: |
+          echo "Creando namespace de monitoreo y aplicando RBAC para Prometheus..."
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f ../../k8s/prometheus-rbac.yaml
 
       # --- INSTALAR EL AWS LOAD BALANCER CONTROLLER VÍA HELM ---
       - name: Install AWS Load Balancer Controller via Helm
