@@ -108,8 +108,10 @@ jobs:
       - name: Forzar limpieza de estado huérfano en S3
         working-directory: ./infra/environments/dev
         run: |
+          set +e
           echo "Eliminando referencias a módulos o recursos antiguos del state remoto si existen..."
-          terraform state rm module.monitoring 2>/dev/null || true
+          terraform state rm module.monitoring 2>/dev/null
+          exit 0
 
       - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
