@@ -94,7 +94,7 @@ resource "aws_instance" "monitoring_server" {
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y docker.io docker-compose curl
+apt-get install -y docker.io docker-compose-v2 curl
 systemctl enable --now docker
 
 # 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
@@ -103,14 +103,16 @@ mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 mkdir -p /opt/monitoring/data/prometheus
 cd /opt/monitoring
 
-# 2. Configurar permisos iniciales para la persistencia de Prometheus
-chmod -R 777 data/prometheus
+# 2. Configurar permisos iniciales para la persistencia de Prometheus y Grafana
+# UID 472 es el usuario interno predeterminado de Grafana
+chown -R 472:472 /opt/monitoring/grafana
+chmod -R 777 /opt/monitoring/data/prometheus
 
 # 3. Configurar prometheus.yml base con auto-descubrimiento EC2
 cat << 'CONFIG' > prometheus.yml
 global:
-  scrape_interval: 5s
-  evaluation_interval: 5s
+  scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -173,7 +175,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 6. Configurar el Provider de Dashboards para Grafana
+# 6. Configurar el Provider de Dashboards para Grafana (Ruta alineada al volumen montado)
 cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -184,7 +186,7 @@ providers:
     disableDeletion: false
     editable: true
     options:
-      path: /var/lib/grafana/dashboards
+      path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
 # 7. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
@@ -217,11 +219,10 @@ cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
 }
 K8SDASH
 
-# <-- AGREGALA AQUI MERO -->
-# Ajustar los permisos para que el usuario interno de Grafana (UID 472) pueda leerlos
-sudo chown -R 472:472 /opt/monitoring/grafana
+# Volver a asegurar permisos correctos justo antes de levantar los contenedores
+chown -R 472:472 /opt/monitoring/grafana
 
-# 9. Crear docker-compose.yml limpio y sin conflictos de volúmenes para Grafana
+# 9. Crear docker-compose.yml limpio y con volúmenes corregidos
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
@@ -249,6 +250,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
+      - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
 
