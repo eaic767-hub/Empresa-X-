@@ -30,7 +30,7 @@ resource "aws_iam_role_policy_attachment" "monitoring_ssm" {
 
 resource "aws_iam_role_policy_attachment" "monitoring_eks_read" {
   role       = aws_iam_role.monitoring_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSReadOnlyAccess"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
 resource "aws_iam_instance_profile" "monitoring_profile" {
