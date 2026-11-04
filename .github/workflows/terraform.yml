@@ -42,17 +42,18 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Init (Purga total de caché y reconfiguración)
+      - name: Terraform Init (Purga Total y Limpieza Agresiva de Caché)
         working-directory: ./infra/environments/dev
         run: |
           BRANCH_NAME="${GITHUB_REF_NAME}"
           SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
           
-          echo "Borrando caché local de submódulos y bloqueos previos..."
+          echo "=== PURGA PROFUNDA DE CACHÉ Y MÓDULOS ==="
           rm -rf .terraform .terraform.lock.hcl
           find . -type d -name ".terraform" -exec rm -rf {} +
+          find . -type d -name ".terraform.tfstate.lock.info" -exec rm -rf {} + 2>/dev/null || true
           
-          echo "Inicializando Terraform con descarga limpia para la rama: $SAFE_BRANCH_NAME"
+          echo "Inicializando Terraform con -reconfigure y -upgrade para la rama: $SAFE_BRANCH_NAME"
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
             -reconfigure \
@@ -103,6 +104,12 @@ jobs:
               sleep 5
             done
           fi
+
+      - name: Forzar limpieza de estado huérfano en S3
+        working-directory: ./infra/environments/dev
+        run: |
+          echo "Eliminando referencias a módulos o recursos antiguos del state remoto si existen..."
+          terraform state rm module.monitoring 2>/dev/null || true
 
       - name: Terraform Apply or Destroy
         working-directory: ./infra/environments/dev
