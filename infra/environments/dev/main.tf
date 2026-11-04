@@ -81,16 +81,18 @@ module "asg" {
   root_volume_size      = var.root_volume_size
 }
 
-# Modulo DE MONITOREO PROMETHEUS + GRAFANA
+# Modulo DE MONITOREO CON HELM Y KUBE-PROMETHEUS-STACK
 module "monitoring" {
-  source                = "../../modules/monitoring"
-  environment           = var.environment
-  resource_prefix       = var.resource_prefix # <--- Pasamos el prefijo
-  vpc_id                = module.vpc_dev.vpc_id
-  vpc_cidr              = module.vpc_dev.vpc_cidr
-  public_subnet_id      = module.vpc_dev.public_subnet_ids[0]
-  ami_id                = module.ec2.ami_id
-  instance_profile_name = module.ec2.instance_profile_name
+  source = "../../modules/monitoring"
+
+  environment                        = var.environment
+  resource_prefix                    = var.resource_prefix
+  cluster_name                       = module.EKS.cluster_name
+  cluster_endpoint                   = module.EKS.cluster_endpoint
+  cluster_certificate_authority_data = module.EKS.cluster_certificate_authority_data
+  cluster_oidc_issuer_url            = module.EKS.oidc_issuer_url
+
+  depends_on = [module.EKS]
 }
 #-------------------------------------------------K8S-----------------------------------------------------------------
 # Modulo DE K8S EKS
@@ -103,8 +105,7 @@ module "EKS" {
 
 # Módulo IRSA para el AWS Load Balancer Controller
 module "aws_load_balancer_controller_irsa" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.0"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-iam.git//modules/iam-role-for-service-accounts-eks?ref=v5.39.0"
 
   role_name                              = "aws-load-balancer-controller-${module.EKS.cluster_name}"
   attach_load_balancer_controller_policy = true

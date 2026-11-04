@@ -1,19 +1,14 @@
-output "monitoring_instance_id" {
-  description = "ID de la instancia EC2 de monitoreo"
-  value       = aws_instance.monitoring_server.id
+output "grafana_service_name" {
+  description = "Nombre del servicio de Grafana en el clúster"
+  value       = "prometheus-stack-grafana"
 }
 
-output "monitoring_public_ip" {
-  description = "IP pública del servidor de monitoreo"
-  value       = aws_instance.monitoring_server.public_ip
+output "monitoring_namespace" {
+  description = "Namespace donde corre el stack de monitoreo"
+  value       = kubernetes_namespace.monitoring.metadata[0].name
 }
 
-output "grafana_url" {
-  description = "URL de acceso a Grafana UI"
-  value       = "http://${aws_instance.monitoring_server.public_ip}:3000"
-}
-
-output "prometheus_url" {
-  description = "URL de acceso a Prometheus UI"
-  value       = "http://${aws_instance.monitoring_server.public_ip}:9090"
+output "grafana_access_instructions" {
+  description = "Instrucciones para acceder a Grafana mediante port-forwarding local"
+  value       = "Ejecuta: kubectl port-forward svc/prometheus-stack-grafana 3000:3000 -n monitoring (Usuario: admin / Password: admin)"
 }
