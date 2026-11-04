@@ -79,7 +79,7 @@ resource "aws_security_group" "monitoring_sg" {
 }
 
 #------------------------------------------------------------------------------
-# SERVIDOR EC2 DE MONITOREO (TOTALMENTE AUTOMATIZADO - K8S + EC2)
+# SERVIDOR EC2 DE MONITOREO (TOTALMENTE AUTOMATIZADO - EC2 + K8S DEPLOY)
 #------------------------------------------------------------------------------
 resource "aws_instance" "monitoring_server" {
   ami                    = var.ami_id
@@ -94,9 +94,14 @@ resource "aws_instance" "monitoring_server" {
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y docker.io docker-compose-v2 curl wget
+apt-get install -y docker.io docker-compose-v2 curl wget awscli
 
-# 1. Instalar y configurar Node Exporter de forma nativa como servicio del sistema
+# 1. Instalar kubectl para que la EC2 pueda interactuar con el cluster EKS
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+mv kubectl /usr/local/bin/
+
+# 2. Instalar y configurar Node Exporter de forma nativa como servicio del sistema
 NODE_EXPORTER_VERSION="1.7.0"
 cd /tmp
 wget https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
@@ -121,17 +126,25 @@ SERVICE
 systemctl daemon-reload
 systemctl enable --now node_exporter
 
-# 2. Crear la estructura de carpetas necesaria para Prometheus y Grafana
+# 3. Desplegar automáticamente kube-state-metrics en el clúster EKS de AWS
+# (Obtiene el nombre del cluster activo en la región de forma automática)
+EKS_CLUSTER_NAME=$(aws eks list-clusters --region us-east-1 --query "clusters[0]" --output text)
+if [ "$EKS_CLUSTER_NAME" != "None" ] && [ -n "$EKS_CLUSTER_NAME" ]; then
+    aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME"
+    kubectl apply -f https://github.com/kubernetes-sigs/kube-state-metrics/releases/latest/download/kube-state-metrics-deployment.yaml
+fi
+
+# 4. Crear la estructura de carpetas necesaria para Prometheus y Grafana
 mkdir -p /opt/monitoring/grafana/provisioning/datasources
 mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 mkdir -p /opt/monitoring/data/prometheus
 cd /opt/monitoring
 
-# 3. Aplicar permisos críticos (UID 472 para Grafana y 777 para Prometheus)
+# 5. Aplicar permisos críticos (UID 472 para Grafana y 777 para Prometheus)
 chown -R 472:472 /opt/monitoring/grafana
 chmod -R 777 /opt/monitoring/data/prometheus
 
-# 4. Configurar prometheus.yml con targets locales y soporte para Kubernetes (Kube-State-Metrics)
+# 6. Configurar prometheus.yml con targets locales y soporte para Kubernetes (Kube-State-Metrics)
 cat << 'CONFIG' > prometheus.yml
 global:
   scrape_interval: 15s
@@ -151,7 +164,7 @@ scrape_configs:
       - targets: ['kube-state-metrics.kube-system.svc:8080']
 CONFIG
 
-# 5. Auto-aprovisionar Datasource de Prometheus en Grafana
+# 7. Auto-aprovisionar Datasource de Prometheus en Grafana
 cat << 'DATASOURCE' > grafana/provisioning/datasources/prometheus.yml
 apiVersion: 1
 datasources:
@@ -163,7 +176,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 6. Configurar el Provider de Dashboards para Grafana
+# 8. Configurar el Provider de Dashboards para Grafana
 cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -177,14 +190,14 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 PROVIDER
 
-# 7. Descargar automáticamente los Dashboards oficiales: Node Exporter (1860) y Kubernetes (3115)
+# 9. Descargar automáticamente los Dashboards oficiales: Node Exporter (1860) y Kubernetes (3115)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 curl -s https://grafana.com/api/dashboards/3115/revisions/3/download -o grafana/provisioning/dashboards/kubernetes.json
 
 # Asegurar permisos finales en Grafana antes de levantar contenedores
 chown -R 472:472 /opt/monitoring/grafana
 
-# 8. Crear docker-compose.yml y levantar la pila
+# 10. Crear docker-compose.yml y levantar la pila
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
