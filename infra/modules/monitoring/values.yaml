@@ -9,7 +9,7 @@ grafana:
     - name: Prometheus
       type: prometheus
       access: proxy
-      url: http://prometheus-stack-kube-prom-prometheus.monitoring.svc.cluster.local:9090
+      url: http://172.20.129.62:9090
       isDefault: true
 
 prometheus:
