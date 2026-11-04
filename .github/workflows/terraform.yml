@@ -2,6 +2,8 @@ name: Terraform Deploy & Destroy
 
 on:
   push:
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
       action:
@@ -46,60 +48,57 @@ jobs:
           BRANCH_NAME="${GITHUB_REF_NAME}"
           SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
           
-          echo "Configurando Terraform Init para aislar el sandbox en la rama: $SAFE_BRANCH_NAME"
+          echo "Inicializando Terraform de forma limpia para la rama: $SAFE_BRANCH_NAME"
+          
+          # Limpieza preventiva por si el runner arrastra caché corrupta
+          rm -rf .terraform .terraform.lock.hcl
           
           terraform init \
-            -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate"
+            -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
+            -upgrade
 
       - name: Pre-Destroy Cleanup & ENI Release
-        if: github.event.inputs.action == 'destroy' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'destroy'))
+        if: github.event.inputs.action == 'destroy'
         run: |
-          echo "Iniciando barrido quirúrgico y liberación de red en AWS antes de destruir Terraform..."
-          
+          echo "=== MODO DESTRUCCIÓN ACTIVADO ==="
           cd ./infra/environments/dev
           
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "")
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           
-          if [ -n "$CLUSTER_NAME" ] && [ -n "$VPC_ID" ]; then
-            echo "Clúster detectado: $CLUSTER_NAME en la VPC: $VPC_ID. Actualizando kubeconfig..."
+          if [ -n "$CLUSTER_NAME" ]; then
+            echo "Actualizando kubeconfig para limpiar Helm y recursos de red..."
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
             
-            echo "1. Desinstalando charts de Helm conflictivos (Prometheus, LBC)..."
+            echo "1. Desinstalando charts de Helm conflictivos..."
             helm uninstall prometheus-stack -n monitoring || true
             helm uninstall aws-load-balancer-controller -n kube-system || true
             helm uninstall metrics-server -n kube-system || true
             
-            echo "2. Purgando todos los objetos de red de Kubernetes..."
-            kubectl delete hpa --all --all-namespaces --timeout=20s || true
-            kubectl delete ingress --all --all-namespaces --timeout=30s || true
-            kubectl delete svc --all --all-namespaces --timeout=30s || true
-            kubectl delete statefulset --all --all-namespaces --timeout=30s || true
-            kubectl delete namespace monitoring --timeout=30s || true
-            
-            echo "3. Forzando la liberación de ENIs y desvinculando Network Interfaces colgadas..."
-            for i in {1..10}; do
-              ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`) || contains(OwnerId, `amazon`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
+            echo "2. Purgando objetos de red y namespaces..."
+            kubectl delete ingress --all --all-namespaces --timeout=15s || true
+            kubectl delete svc --all --all-namespaces --timeout=15s || true
+            kubectl delete namespace monitoring --timeout=20s || true
+          fi
+
+          if [ -n "$VPC_ID" ]; then
+            echo "3. Liberando ENIs retenidas por balanceadores en la VPC $VPC_ID..."
+            for i in {1..5}; do
+              ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
               
               if [ -z "$ENI_IDS" ]; then
-                echo "¡No quedan ENIs bloqueantes de balanceadores en la VPC!"
+                echo "¡ENIs liberadas con éxito!"
                 break
               fi
               
-              echo "Intento $i/10: Encontradas ENIs retenidas ($ENI_IDS). Intentando desasociar..."
               for eni in $ENI_IDS; do
                 ATTACHMENT_ID=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].attachment.attachmentId' --output text 2>/dev/null || echo "")
                 if [ -n "$ATTACHMENT_ID" ] && [ -n "$ATTACHMENT_ID" != "None" ]; then
                   aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID" --force || true
                 fi
               done
-              sleep 10
+              sleep 5
             done
-            
-            echo "4. Pausa de estabilización final de red..."
-            sleep 20
-          else
-            echo "No se encontró un clúster activo o los outputs no están disponibles. Saltando limpieza de K8s y pasando directo a Terraform."
           fi
 
       - name: Terraform Apply or Destroy
@@ -111,10 +110,10 @@ jobs:
           fi
           
           if [ "$ACTION" = "destroy" ]; then
-            echo "Ejecutando Terraform Destroy con auto-approve..."
+            echo "Ejecutando Terraform Destroy..."
             terraform destroy -auto-approve
           else
-            echo "Ejecutando Terraform Apply con auto-approve..."
+            echo "Ejecutando Terraform Apply..."
             terraform apply -auto-approve
           fi
 
@@ -126,23 +125,18 @@ jobs:
           ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_irsa_iam_role_arn || echo "")
           
           if [ -n "$CLUSTER_NAME" ]; then
-            echo "Actualizando kubeconfig para el clúster: $CLUSTER_NAME"
             aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME"
           fi
           
           if [ -n "$ROLE_ARN" ]; then
-            echo "Configurando la ServiceAccount de Kubernetes con el rol IRSA: $ROLE_ARN"
             kubectl create serviceaccount aws-load-balancer-controller -n kube-system --dry-run=client -o yaml | kubectl apply -f -
             kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn="$ROLE_ARN" --overwrite
-          else
-            echo "Aviso: No se pudo obtener el ARN del rol IRSA desde Terraform outputs."
           fi
 
       - name: Deploy Prometheus RBAC to EKS
         if: github.event.inputs.action != 'destroy'
         run: |
           REPO_ROOT="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
-          echo "Creando namespace de monitoreo y aplicando RBAC para Prometheus..."
           kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -f "$REPO_ROOT/k8s/prometheus-rbac.yaml"
 
@@ -168,17 +162,7 @@ jobs:
         if: github.event.inputs.action != 'destroy'
         working-directory: ./infra/environments/dev
         run: |
-          for i in {1..12}; do
-            if kubectl get endpoints aws-load-balancer-webhook-service -n kube-system &>/dev/null; then
-              ENDPOINTS=$(kubectl get endpoints aws-load-balancer-webhook-service -n kube-system -o jsonpath='{.subsets[*].addresses[*].ip}')
-              if [ -n "$ENDPOINTS" ]; then
-                break
-              fi
-            fi
-            sleep 10
-          done
           sleep 15
-
           helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
           helm repo update
           helm upgrade --install metrics-server metrics-server/metrics-server \
@@ -229,7 +213,7 @@ jobs:
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-         
+
   deploy-k8s:
     name: Deploy to Kubernetes
     needs: [terraform, docker-build]
