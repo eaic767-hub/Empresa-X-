@@ -42,18 +42,19 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Init (Sandbox por Rama)
+      - name: Terraform Init (Limpieza total de HashiCorp y Plugins)
         working-directory: ./infra/environments/dev
         run: |
           BRANCH_NAME="${GITHUB_REF_NAME}"
           SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
           
-          echo "Inicializando Terraform de forma limpia para la rama: $SAFE_BRANCH_NAME"
-          
+          echo "Limpiando caché local de plugins y bloqueos en el runner..."
           rm -rf .terraform .terraform.lock.hcl
           
+          echo "Inicializando Terraform con descarga limpia de plugins para la rama: $SAFE_BRANCH_NAME"
           terraform init \
             -backend-config="key=sandbox/$SAFE_BRANCH_NAME/terraform.tfstate" \
+            -reconfigure \
             -upgrade
 
       - name: Pre-Destroy Cleanup & ENI Release
@@ -102,7 +103,7 @@ jobs:
             done
           fi
 
-      - name: Terraform Apply or Destroy
+      - name: Terraform Refresh & Apply
         working-directory: ./infra/environments/dev
         run: |
           ACTION="${{ github.event.inputs.action }}"
@@ -114,7 +115,8 @@ jobs:
             echo "Ejecutando Terraform Destroy con auto-approve..."
             terraform destroy -auto-approve
           else
-            echo "Ejecutando Terraform Apply con auto-approve..."
+            echo "Forzando actualización del estado y ejecutando Apply..."
+            terraform refresh || true
             terraform apply -auto-approve
           fi
 
@@ -236,4 +238,14 @@ jobs:
           EKS_CLUSTER_NAME: ${{ needs.terraform.outputs.eks_cluster }}
         run: |
           for i in {1..5}; do
-            aws eks update-kube
+            aws eks update-kubeconfig --region us-east-1 --name "$EKS_CLUSTER_NAME" && break || sleep 15
+          done
+          kubectl cluster-info
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          kubectl apply -f k8s/storage-class.yaml
+          kubectl apply -f k8s/statefulset.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/hpa.yaml
