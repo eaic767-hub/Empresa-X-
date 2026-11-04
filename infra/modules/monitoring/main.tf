@@ -217,7 +217,7 @@ cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
 }
 K8SDASH
 
-# 9. Crear docker-compose.yml con Prometheus y Grafana (mapeando volúmenes internos de dashboards)
+# 9. Crear docker-compose.yml limpio y sin conflictos de volúmenes para Grafana
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
@@ -243,9 +243,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/provisioning/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 COMPOSE
