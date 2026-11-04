@@ -1,4 +1,46 @@
-# Security Group dedicado al servidor de monitoreo
+#------------------------------------------------------------------------------
+# IAM ROLE + INSTANCE PROFILE PARA EL SERVIDOR DE MONITOREO
+#------------------------------------------------------------------------------
+
+resource "aws_iam_role" "monitoring_role" {
+  name = "monitoring-server-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "monitoring_ssm" {
+  role       = aws_iam_role.monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "monitoring_eks_read" {
+  role       = aws_iam_role.monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSReadOnlyAccess"
+}
+
+resource "aws_iam_instance_profile" "monitoring_profile" {
+  name = "monitoring-server-profile-${var.environment}"
+  role = aws_iam_role.monitoring_role.name
+}
+
+#------------------------------------------------------------------------------
+# SECURITY GROUP DEDICADO AL SERVIDOR DE MONITOREO
+#------------------------------------------------------------------------------
 resource "aws_security_group" "monitoring_sg" {
   name        = "monitoring-sg-${var.environment}"
   description = "Security Group de monitoreo Prometheus & Grafana"
@@ -36,13 +78,15 @@ resource "aws_security_group" "monitoring_sg" {
   }
 }
 
-# Servidor EC2 de monitoreo
+#------------------------------------------------------------------------------
+# SERVIDOR EC2 DE MONITOREO
+#------------------------------------------------------------------------------
 resource "aws_instance" "monitoring_server" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = var.public_subnet_id
   vpc_security_group_ids = [aws_security_group.monitoring_sg.id]
-  iam_instance_profile   = var.instance_profile_name
+  iam_instance_profile   = aws_iam_instance_profile.monitoring_profile.name
 
   user_data_replace_on_change = true
 
@@ -103,21 +147,27 @@ CONFIG
 
 # 4. Inyección dinámica del job de EKS (Módulo 4) consultando la API de AWS al arrancar
 echo "Descubriendo endpoint del clúster EKS para Prometheus..."
-EKS_ENDPOINT=\$(aws eks describe-cluster --name "\$(aws eks list-clusters --query 'clusters[0]' --output text)" --region ${var.aws_region} --query 'cluster.endpoint' --output text 2>/dev/null || echo "")
+CLUSTER_NAME=$(aws eks list-clusters --region ${var.aws_region} --query 'clusters[0]' --output text 2>/dev/null || echo "")
 
-if [ -n "\$EKS_ENDPOINT" ] && [ "\$EKS_ENDPOINT" != "None" ]; then
-  CLEAN_ENDPOINT=\$${EKS_ENDPOINT#https://}
-  echo "¡Clúster EKS detectado! Agregando scraping dinámico para: \$CLEAN_ENDPOINT"
+if [ -n "$CLUSTER_NAME" ] && [ "$CLUSTER_NAME" != "None" ]; then
+  EKS_ENDPOINT=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region ${var.aws_region} --query 'cluster.endpoint' --output text 2>/dev/null || echo "")
   
-  cat << 'EKSJOB' >> prometheus.yml
+  if [ -n "$EKS_ENDPOINT" ] && [ "$EKS_ENDPOINT" != "None" ]; then
+    CLEAN_ENDPOINT=$${EKS_ENDPOINT#https://}
+    echo "¡Clúster EKS detectado! Agregando scraping dinámico para: $CLEAN_ENDPOINT"
+    
+    cat << 'EKSJOB' >> prometheus.yml
 
   - job_name: "kubernetes-cluster"
     scheme: https
     tls_config:
       insecure_skip_verify: true
     static_configs:
-      - targets: ["\$CLEAN_ENDPOINT"]
+      - targets: ["$CLEAN_ENDPOINT"]
 EKSJOB
+  else
+    echo "Aviso: No se pudo describir el clúster EKS. Se omitió el scrape de Kubernetes."
+  fi
 else
   echo "Aviso: No se encontró un clúster EKS activo en este momento. Se omitió el scrape de Kubernetes."
 fi
