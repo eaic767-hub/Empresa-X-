@@ -39,7 +39,7 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes { #OJO LANZA ERROR PERO ES POR LA VERSIÓN LOCAL DEL HELM, EN EL CI/CD CORRE PERFECTAMENTE
     host                   = module.EKS.cluster_endpoint
     cluster_ca_certificate = base64decode(module.EKS.cluster_certificate_authority_data)
     exec {
