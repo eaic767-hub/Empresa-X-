@@ -50,7 +50,6 @@ jobs:
           
           echo "Inicializando Terraform de forma limpia para la rama: $SAFE_BRANCH_NAME"
           
-          # Limpieza preventiva por si el runner arrastra caché corrupta
           rm -rf .terraform .terraform.lock.hcl
           
           terraform init \
@@ -58,27 +57,29 @@ jobs:
             -upgrade
 
       - name: Pre-Destroy Cleanup & ENI Release
-        if: github.event.inputs.action == 'destroy'
+        if: github.event.inputs.action == 'destroy' || contains(github.workflow, 'Destroy')
         run: |
-          echo "=== MODO DESTRUCCIÓN ACTIVADO ==="
+          echo "=== MODO DESTRUCCIÓN BLINDADO ACTIVADO ==="
           cd ./infra/environments/dev
           
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "")
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           
           if [ -n "$CLUSTER_NAME" ]; then
-            echo "Actualizando kubeconfig para limpiar Helm y recursos de red..."
-            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" || true
+            echo "Intentando actualizar kubeconfig (si el clúster existe)..."
+            aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" 2>/dev/null || echo "Clúster ya no accesible en AWS, saltando kubeconfig."
             
-            echo "1. Desinstalando charts de Helm conflictivos..."
-            helm uninstall prometheus-stack -n monitoring || true
-            helm uninstall aws-load-balancer-controller -n kube-system || true
-            helm uninstall metrics-server -n kube-system || true
+            echo "1. Desinstalando charts de Helm de forma segura..."
+            helm uninstall prometheus-stack -n monitoring 2>/dev/null || true
+            helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
+            helm uninstall metrics-server -n kube-system 2>/dev/null || true
             
-            echo "2. Purgando objetos de red y namespaces..."
-            kubectl delete ingress --all --all-namespaces --timeout=15s || true
-            kubectl delete svc --all --all-namespaces --timeout=15s || true
-            kubectl delete namespace monitoring --timeout=20s || true
+            echo "2. Purgando objetos de red y namespaces de K8s..."
+            kubectl delete ingress --all --all-namespaces --timeout=10s 2>/dev/null || true
+            kubectl delete svc --all --all-namespaces --timeout=10s 2>/dev/null || true
+            kubectl delete namespace monitoring --timeout=15s 2>/dev/null || true
+          else
+            echo "Outputs de Terraform no encontrados o clúster ya destruido. Pasando a limpieza de red física..."
           fi
 
           if [ -n "$VPC_ID" ]; then
@@ -87,14 +88,14 @@ jobs:
               ENI_IDS=$(aws ec2 describe-network-interfaces --filters Name=vpc-id,Values="$VPC_ID" Name=status,Values="in-use" --query 'NetworkInterfaces[?contains(Description, `ELB`) || contains(Description, `AWS Elastic Load Balancing`)]|[?attachment.status==`attached`].networkInterfaceId' --output text 2>/dev/null || echo "")
               
               if [ -z "$ENI_IDS" ]; then
-                echo "¡ENIs liberadas con éxito!"
+                echo "¡No hay ENIs bloqueantes en la VPC!"
                 break
               fi
               
               for eni in $ENI_IDS; do
                 ATTACHMENT_ID=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].attachment.attachmentId' --output text 2>/dev/null || echo "")
                 if [ -n "$ATTACHMENT_ID" ] && [ -n "$ATTACHMENT_ID" != "None" ]; then
-                  aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID" --force || true
+                  aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID" --force 2>/dev/null || true
                 fi
               done
               sleep 5
@@ -110,10 +111,10 @@ jobs:
           fi
           
           if [ "$ACTION" = "destroy" ]; then
-            echo "Ejecutando Terraform Destroy..."
+            echo "Ejecutando Terraform Destroy con auto-approve..."
             terraform destroy -auto-approve
           else
-            echo "Ejecutando Terraform Apply..."
+            echo "Ejecutando Terraform Apply con auto-approve..."
             terraform apply -auto-approve
           fi
 
