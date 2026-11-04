@@ -1,4 +1,84 @@
 #------------------------------------------------------------------------------
+# IAM ROLE + INSTANCE PROFILE PARA EL SERVIDOR DE MONITOREO
+#------------------------------------------------------------------------------
+
+resource "aws_iam_role" "monitoring_role" {
+  name = "monitoring-server-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "monitoring_ssm" {
+  role       = aws_iam_role.monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "monitoring_eks_read" {
+  role       = aws_iam_role.monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_instance_profile" "monitoring_profile" {
+  name = "monitoring-server-profile-${var.environment}"
+  role = aws_iam_role.monitoring_role.name
+}
+
+#------------------------------------------------------------------------------
+# SECURITY GROUP DEDICADO AL SERVIDOR DE MONITOREO
+#------------------------------------------------------------------------------
+resource "aws_security_group" "monitoring_sg" {
+  name        = "monitoring-sg-${var.environment}"
+  description = "Security Group de monitoreo Prometheus & Grafana"
+  vpc_id      = var.vpc_id
+
+  # Grafana UI (3000)
+  ingress {
+    description = "Grafana Web Dashboard"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Prometheus UI/API (9090)
+  ingress {
+    description = "Prometheus Server UI"
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Salida total para scraping"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "monitoring-sg-${var.environment}"
+    Environment = var.environment
+  }
+}
+
+#------------------------------------------------------------------------------
 # SERVIDOR EC2 DE MONITOREO
 #------------------------------------------------------------------------------
 resource "aws_instance" "monitoring_server" {
@@ -17,7 +97,7 @@ apt-get update -y
 apt-get install -y docker.io docker-compose curl
 systemctl enable --now docker
 
-# 1. Crear la estructura completa de carpetas para Grafana y Prometheus
+# 1. Crear la estructura de carpetas necesaria para Grafana y Prometheus
 mkdir -p /opt/monitoring/grafana/provisioning/datasources
 mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 mkdir -p /opt/monitoring/data/prometheus
@@ -58,7 +138,8 @@ scrape_configs:
         replacement: '$1'
 CONFIG
 
-# 4. Inyección dinámica del job de EKS (Módulo 4)
+# 4. Inyección dinámica del job de EKS consultando la API de AWS al arrancar
+echo "Descubriendo endpoint del clúster EKS para Prometheus..."
 CLUSTER_NAME=$(aws eks list-clusters --region ${var.aws_region} --query 'clusters[0]' --output text 2>/dev/null || echo "")
 
 if [ -n "$CLUSTER_NAME" ] && [ "$CLUSTER_NAME" != "None" ]; then
@@ -66,6 +147,8 @@ if [ -n "$CLUSTER_NAME" ] && [ "$CLUSTER_NAME" != "None" ]; then
   
   if [ -n "$EKS_ENDPOINT" ] && [ "$EKS_ENDPOINT" != "None" ]; then
     CLEAN_ENDPOINT=$${EKS_ENDPOINT#https://}
+    echo "¡Clúster EKS detectado! Agregando scraping dinámico para: $CLEAN_ENDPOINT"
+    
     cat << 'EKSJOB' >> prometheus.yml
 
   - job_name: "kubernetes-cluster"
@@ -90,7 +173,7 @@ datasources:
     editable: true
 DATASOURCE
 
-# 6. Configurar el Provider de Dashboards para Grafana apuntando a la carpeta interna
+# 6. Configurar el Provider de Dashboards para Grafana
 cat << 'PROVIDER' > grafana/provisioning/dashboards/dashboards.yml
 apiVersion: 1
 providers:
@@ -107,7 +190,7 @@ PROVIDER
 # 7. Descargar automáticamente el Dashboard 1860 (Node Exporter Full)
 curl -s https://grafana.com/api/dashboards/1860/revisions/37/download -o grafana/provisioning/dashboards/node_exporter.json
 
-# 8. Inyectar automáticamente el Dashboard de Kubernetes (ID 3115 adaptado)
+# 8. Inyectar automáticamente el Dashboard de Kubernetes optimizado
 cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
 {
   "annotations": { "list": [] },
@@ -134,7 +217,7 @@ cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
 }
 K8SDASH
 
-# 9. Crear docker-compose.yml montando las carpetas de aprovisionamiento en las rutas correctas de Grafana
+# 9. Crear docker-compose.yml con Prometheus y Grafana (mapeando volúmenes internos de dashboards)
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
 services:
