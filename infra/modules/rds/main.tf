@@ -30,11 +30,11 @@ resource "aws_secretsmanager_secret_version" "db_credentials_val" {
 
 # 4. Grupo de Subredes para RDS
 resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group"
+  name       = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group-v1"
   subnet_ids = var.private_subnet_ids
 
   tags = {
-    Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group"
+    Name        = var.resource_prefix != "" ? "${var.environment}-${var.resource_prefix}-rds-subnet-group" : "${var.environment}-rds-subnet-group-v1"
     Environment = var.environment
   }
 }
