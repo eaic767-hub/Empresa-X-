@@ -217,6 +217,10 @@ cat << 'K8SDASH' > grafana/provisioning/dashboards/k8s-cluster.json
 }
 K8SDASH
 
+# <-- AGREGALA AQUI MERO -->
+# Ajustar los permisos para que el usuario interno de Grafana (UID 472) pueda leerlos
+sudo chown -R 472:472 /opt/monitoring/grafana
+
 # 9. Crear docker-compose.yml limpio y sin conflictos de volúmenes para Grafana
 cat << 'COMPOSE' > docker-compose.yml
 version: '3.8'
