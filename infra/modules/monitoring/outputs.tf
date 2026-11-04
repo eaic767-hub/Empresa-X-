@@ -5,7 +5,7 @@ output "grafana_service_name" {
 
 output "monitoring_namespace" {
   description = "Namespace donde corre el stack de monitoreo"
-  value       = kubernetes_namespace.monitoring.metadata[0].name
+  value       = "monitoring"
 }
 
 output "grafana_access_instructions" {
