@@ -1,9 +1,9 @@
-#Politicas de denegación por defecto y reglas estrictas de comunicación de backend y rds a pods
+# Políticas de denegación por defecto y reglas estrictas de comunicación de backend y rds a pods
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-all
-  namespace: monitoring #Investigar donde corre la app
+  namespace: monitoring
 spec:
   podSelector: {}
   policyTypes:
@@ -23,7 +23,7 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-        app: frontend
+          app: frontend
     ports:
     - protocol: TCP
       port: 8080
@@ -38,7 +38,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-    app: backend
+      app: backend
   egress:
   - to:
     - ipBlock:
