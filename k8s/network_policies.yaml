@@ -1,0 +1,58 @@
+#Politicas de denegación por defecto y reglas estrictas de comunicación de backend y rds a pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: monitoring #Investigar donde corre la app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+        app: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-rds
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+    app: backend
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16 # Rango CIDR de VPC en AWS
+    ports:
+    - protocol: TCP
+      port: 3306 # 3306 MySQL o 5432 PostGreSQL
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  policyTypes:
+  - Egress
