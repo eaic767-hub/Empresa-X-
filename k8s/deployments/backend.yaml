@@ -30,3 +30,10 @@ spec:
           capabilities:
             drop:
             - ALL
+        # --- LO QUE SE LE AGREGÓ PARA RESOLVER EL BLOQUEO ---
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+      volumes:
+      - name: tmp-dir
+        emptyDir: {}
