@@ -21,46 +21,54 @@ resource "aws_internet_gateway" "igw" {
 resource "aws_subnet" "public_subnet_a" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = "${var.aws_region}a" #region 1
+  availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "subnet-public-a-${var.environment}"
-    Environment = var.environment
+    Name                                          = "subnet-public-a-${var.environment}"
+    Environment                                   = var.environment
+    "kubernetes.io/cluster/empresa-x-cluster-dev" = "shared"
+    "kubernetes.io/role/elb"                      = "1"
   }
 }
 
 resource "aws_subnet" "public_subnet_b" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "${var.aws_region}b" #region 2
+  availability_zone       = "${var.aws_region}b"
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "subnet-public-b-${var.environment}"
-    Environment = var.environment
+    Name                                          = "subnet-public-b-${var.environment}"
+    Environment                                   = var.environment
+    "kubernetes.io/cluster/empresa-x-cluster-dev" = "shared"
+    "kubernetes.io/role/elb"                      = "1"
   }
 }
 
 resource "aws_subnet" "private_subnet_a" {
   vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.0.10.0/24"
-  availability_zone = "${var.aws_region}a" #region 1
+  availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name        = "subnet-private-a-${var.environment}"
-    Environment = var.environment
+    Name                                          = "subnet-private-a-${var.environment}"
+    Environment                                   = var.environment
+    "kubernetes.io/cluster/empresa-x-cluster-dev" = "shared"
+    "kubernetes.io/role/internal-elb"             = "1"
   }
 }
 
 resource "aws_subnet" "private_subnet_b" {
   vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.0.20.0/24"
-  availability_zone = "${var.aws_region}b" #region 2
+  availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name        = "subnet-private-b-${var.environment}"
-    Environment = var.environment
+    Name                                          = "subnet-private-b-${var.environment}"
+    Environment                                   = var.environment
+    "kubernetes.io/cluster/empresa-x-cluster-dev" = "shared"
+    "kubernetes.io/role/internal-elb"             = "1"
   }
 }
 
@@ -88,8 +96,7 @@ resource "aws_route_table_association" "public_assoc_b" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-#---NAT GATEWAY & RUTEO PRIVADO ---
-#1. IP Elastica para el NAT Gateway
+# --- NAT GATEWAY & RUTEO PRIVADO ---
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 
@@ -99,10 +106,9 @@ resource "aws_eip" "nat_eip" {
   }
 }
 
-#2. NAT Gateway en la Subred Publica A
 resource "aws_nat_gateway" "nat_gw" {
   allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.public_subnet_a.id # Se ubica en la pública para tocar el Internet Gateway
+  subnet_id     = aws_subnet.public_subnet_a.id
 
   tags = {
     Name        = "nat-gw-${var.environment}"
@@ -112,13 +118,12 @@ resource "aws_nat_gateway" "nat_gw" {
   depends_on = [aws_internet_gateway.igw]
 }
 
-#3. Tabla de Ruteo Privada
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.main_vpc.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat_gw.id #Redirigimos todo el trafico saliente al NAT
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
   }
 
   tags = {
@@ -127,7 +132,6 @@ resource "aws_route_table" "private_rt" {
   }
 }
 
-#4. Asociación de las Subredes Privadas a la Tabla Privada
 resource "aws_route_table_association" "private_assoc_a" {
   subnet_id      = aws_subnet.private_subnet_a.id
   route_table_id = aws_route_table.private_rt.id
