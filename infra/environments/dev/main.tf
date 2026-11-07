@@ -105,3 +105,25 @@ module "aws_load_balancer_controller_irsa" {
   }
 }
 
+# Política adicional para otorgar permisos de lectura sobre tablas de rutas (DescribeRouteTables)
+resource "aws_iam_policy" "lbc_extra_routes" {
+  name        = "AWSLoadBalancerControllerExtraRoutes-${module.EKS.cluster_name}"
+  description = "Permiso adicional para describir tablas de rutas requerido por el LBC"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeRouteTables"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Adjuntar la política adicional al rol IAM generado por el módulo IRSA
+resource "aws_iam_role_policy_attachment" "lbc_extra_attach" {
+  role       = module.aws_load_balancer_controller_irsa.iam_role_name
+  policy_arn = aws_iam_policy.lbc_extra_routes.arn
+}
